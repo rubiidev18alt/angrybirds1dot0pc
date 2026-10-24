@@ -192,8 +192,11 @@ canvas {
 .ammo-chip.spent { opacity: 0.22; filter: grayscale(1); }
 .ammo-chip[data-type="pebble"] { background: #94a3b8; }
 .ammo-chip[data-type="bolt"] { background: #5eead4; }
-.ammo-chip[data-type="bomber"] { background: #fb923c; }
+.ammo-chip[data-type="bomber"] { background: #ef4444; color: #fff; }
 .ammo-chip[data-type="splitter"] { background: #c4b5fd; }
+.ammo-chip[data-type="bubble"] { background: #ec4899; color: #fff; }
+.ammo-chip[data-type="inflator"] { background: #fb923c; }
+.ammo-chip[data-type="boulder"] { background: #64748b; color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 3px 10px rgba(0,0,0,0.4); }
 
 .ability-hint { font-size: 0.9rem; color: var(--muted); text-align: right; }
 .ability-hint strong { color: var(--accent); }

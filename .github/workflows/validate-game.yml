@@ -33,4 +33,4 @@ jobs:
         run: python tools/build_release.py
 
       - name: Verify archive exists
-        run: test -s dist/Slingstone-2.0.0.zip
+        run: test -s dist/Slingstone-2.1.0.zip

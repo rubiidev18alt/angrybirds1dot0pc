@@ -48,11 +48,11 @@ Headless regression tests for the Slingstone browser game. Runs the real game lo
 node tools/test_game.js
 ```
 
-It verifies repeated shots, structure stability, out-of-stones handling, reachability of all three levels, destructible blocks, every shot ability, star awards, camera/flyover/peek, and the sound toggle. Set `globalThis.__SLINGSTONE_TEST__ = true` before loading `game.js` to install the small test hook.
+It verifies repeated shots, structure stability, out-of-stones handling, reachability and settling stability of all ten levels, destructible blocks, every shot ability (including the boss), star awards, camera/flyover/peek, and the sound toggle. Set `globalThis.__SLINGSTONE_TEST__ = true` before loading `game.js` to install the small test hook.
 
 ## `build_release.py`
 
-Builds `dist/Slingstone-2.0.0.zip` from the original game files plus the vendored, MIT-licensed Matter.js build and its license text.
+Builds `dist/Slingstone-2.1.0.zip` from the original game files plus the vendored, MIT-licensed Matter.js build and its license text.
 
 ```bash
 python3 tools/build_release.py

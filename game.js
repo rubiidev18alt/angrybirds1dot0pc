@@ -48,8 +48,11 @@
   const STONE_TYPES = {
     pebble:   { r: 15, density: 0.006,  glyph: "●", name: "Pebble",   color: "#9aa8bd", ability: null },
     bolt:     { r: 14, density: 0.0052, glyph: "⚡", name: "Bolt",     color: "#5eead4", ability: "surge" },
-    bomber:   { r: 17, density: 0.0072, glyph: "✸", name: "Bomber",   color: "#fb923c", ability: "blast" },
+    bomber:   { r: 17, density: 0.0072, glyph: "✸", name: "Bomber",   color: "#ef4444", ability: "blast" },
     splitter: { r: 15, density: 0.0055, glyph: "✦", name: "Splitter", color: "#c4b5fd", ability: "scatter" },
+    bubble:   { r: 16, density: 0.0045, glyph: "◎", name: "Bubble",   color: "#ec4899", ability: "uplift" },
+    inflator: { r: 15, density: 0.006,  glyph: "◉", name: "Inflator", color: "#fb923c", ability: "inflate" },
+    boulder:  { r: 26, density: 0.02,   glyph: "◆", name: "Boulder",  color: "#64748b", ability: null, heavy: true },
   };
 
   const ABILITY_TEXT = {
@@ -57,11 +60,15 @@
     bolt: "<strong>Bolt:</strong> click, tap, or press Space mid-flight for a burst of speed.",
     bomber: "<strong>Bomber:</strong> click, tap, or press Space mid-flight to detonate.",
     splitter: "<strong>Splitter:</strong> click, tap, or press Space mid-flight to split into three.",
+    bubble: "<strong>Bubble (pink):</strong> tap mid-flight to release a rising lift that floats blocks and wisps upward.",
+    inflator: "<strong>Inflator (orange):</strong> tap mid-flight to swell into a giant crushing boulder.",
+    boulder: "<strong>Boulder:</strong> no ability — but enormous weight and huge impact damage.",
   };
 
   // Block definitions use top-left x/y for easy level authoring.
   const b = (type, x, y, w, h) => ({ type, x, y, w, h });
-  const wisp = (x, y, r = 16) => ({ x, y, r });
+  // Wisps normally pop in one hit. A boss wisp has hp > 1 and an armored look.
+  const wisp = (x, y, r = 16, opts = {}) => ({ x, y, r, hp: opts.hp ?? 1, boss: !!opts.boss, hue: opts.hue });
 
   const LEVELS = [
     {
@@ -109,6 +116,127 @@
         b("glass", 1262, 364, 40, 40),
       ],
       wisps: [wisp(860, 463), wisp(1020, 463), wisp(1130, 504), wisp(1282, 346), wisp(1410, 504)],
+    },
+    {
+      name: "Bubble Bath",
+      ammo: ["pebble", "bubble", "bubble", "bolt", "bomber"],
+      blocks: [
+        b("wood", 700, 452, 22, 68),
+        b("wood", 860, 452, 22, 68),
+        b("wood", 700, 436, 182, 18),
+        b("glass", 752, 400, 40, 36),
+        b("glass", 800, 400, 40, 36),
+        b("stone", 980, 476, 120, 44),
+      ],
+      wisps: [wisp(772, 380), wisp(820, 380), wisp(1040, 458), wisp(1180, 504), wisp(660, 504)],
+    },
+    {
+      name: "Heavy Metal",
+      ammo: ["boulder", "pebble", "bolt", "bomber", "boulder"],
+      blocks: [
+        b("stone", 720, 468, 40, 52),
+        b("stone", 940, 468, 40, 52),
+        b("stone", 720, 436, 260, 32),
+        b("stone", 830, 356, 40, 80),
+        b("glass", 1010, 476, 40, 44),
+        b("glass", 1058, 476, 40, 44),
+        b("wood", 1010, 440, 88, 18),
+      ],
+      wisps: [wisp(850, 336), wisp(1054, 420), wisp(1180, 504), wisp(660, 504)],
+    },
+    {
+      name: "Split Decision",
+      ammo: ["splitter", "splitter", "pebble", "bomber", "bolt", "bubble"],
+      blocks: [
+        b("wood", 690, 440, 20, 80),
+        b("wood", 790, 440, 20, 80),
+        b("wood", 690, 424, 120, 16),
+        b("glass", 900, 476, 40, 44),
+        b("glass", 900, 432, 40, 44),
+        b("wood", 1040, 456, 20, 64),
+        b("wood", 1150, 456, 20, 64),
+        b("wood", 1040, 440, 130, 16),
+        b("stone", 1080, 404, 50, 36),
+      ],
+      wisps: [wisp(750, 404), wisp(920, 412), wisp(1105, 384), wisp(1240, 504), wisp(640, 504)],
+    },
+    {
+      name: "Up, Up & Away",
+      ammo: ["bubble", "bubble", "bolt", "pebble", "bomber", "splitter"],
+      blocks: [
+        b("stone", 720, 480, 260, 40),
+        b("wood", 740, 400, 20, 80),
+        b("wood", 940, 400, 20, 80),
+        b("wood", 740, 384, 220, 16),
+        b("glass", 800, 344, 40, 40),
+        b("glass", 860, 344, 40, 40),
+        b("wood", 1040, 440, 20, 80),
+        b("wood", 1160, 440, 20, 80),
+        b("wood", 1040, 424, 140, 16),
+      ],
+      wisps: [wisp(820, 324), wisp(880, 324), wisp(1100, 404), wisp(1260, 504), wisp(660, 504)],
+    },
+    {
+      name: "The Big Squeeze",
+      ammo: ["inflator", "inflator", "pebble", "bolt", "bomber", "boulder"],
+      blocks: [
+        b("stone", 700, 452, 24, 68),
+        b("stone", 1060, 452, 24, 68),
+        b("stone", 700, 424, 384, 28),
+        b("wood", 760, 384, 20, 40),
+        b("wood", 1000, 384, 20, 40),
+        b("wood", 760, 366, 260, 18),
+        b("glass", 820, 476, 40, 44),
+        b("glass", 868, 476, 40, 44),
+        b("glass", 916, 476, 40, 44),
+      ],
+      wisps: [wisp(890, 346), wisp(840, 458), wisp(888, 458), wisp(936, 458), wisp(1180, 504), wisp(650, 504)],
+    },
+    {
+      name: "Fortress Fall",
+      ammo: ["boulder", "bomber", "inflator", "splitter", "bubble", "bolt", "pebble"],
+      blocks: [
+        b("stone", 680, 460, 28, 60),
+        b("stone", 760, 460, 28, 60),
+        b("stone", 680, 432, 108, 28),
+        b("glass", 700, 396, 40, 36),
+        b("stone", 860, 380, 24, 140),
+        b("stone", 1040, 380, 24, 140),
+        b("stone", 860, 356, 204, 24),
+        b("wood", 900, 316, 20, 40),
+        b("wood", 1000, 316, 20, 40),
+        b("wood", 900, 300, 120, 16),
+        b("glass", 1120, 472, 40, 48),
+        b("glass", 1168, 472, 40, 48),
+        b("stone", 1120, 440, 88, 32),
+      ],
+      wisps: [wisp(720, 376), wisp(960, 280), wisp(950, 500), wisp(1140, 420), wisp(1250, 504), wisp(620, 504)],
+    },
+    {
+      name: "The Wisp King",
+      boss: true,
+      ammo: ["boulder", "bomber", "inflator", "bolt", "bomber", "boulder", "splitter", "bubble"],
+      blocks: [
+        b("stone", 880, 476, 300, 44),
+        b("stone", 900, 436, 40, 40),
+        b("stone", 1120, 436, 40, 40),
+        b("stone", 900, 416, 260, 20),
+        b("wood", 720, 440, 20, 80),
+        b("wood", 800, 440, 20, 80),
+        b("wood", 720, 424, 100, 16),
+        b("glass", 740, 384, 40, 40),
+        b("stone", 1220, 440, 20, 80),
+        b("stone", 1300, 440, 20, 80),
+        b("stone", 1220, 424, 100, 16),
+        b("glass", 1260, 384, 40, 40),
+      ],
+      wisps: [
+        wisp(1030, 372, 42, { hp: 6, boss: true, hue: 315 }),
+        wisp(760, 364),
+        wisp(1280, 364),
+        wisp(680, 504),
+        wisp(1360, 504),
+      ],
     },
   ];
 
@@ -239,6 +367,9 @@
     blast: () => { noise(0.34, 0.11, 480); tone(70, 0.35, "sawtooth", 0.06, 35); },
     surge: () => { tone(420, 0.2, "sawtooth", 0.04, 900); },
     split: () => { tone(520, 0.13, "triangle", 0.035, 980); tone(660, 0.11, "sine", 0.025, 1200); },
+    bubble: () => { tone(300, 0.28, "sine", 0.04, 940); tone(520, 0.22, "triangle", 0.02, 1250); },
+    inflate: () => { tone(180, 0.3, "sawtooth", 0.045, 420); tone(90, 0.28, "sine", 0.03, 200); },
+    bossHit: () => { tone(260, 0.12, "square", 0.045, 150); noise(0.1, 0.03, 800); },
     win: () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.3, "triangle", 0.05), i * 110)); },
     lose: () => { tone(220, 0.35, "sawtooth", 0.045, 90); },
   };
@@ -301,11 +432,16 @@
   }
 
   function addWisp(def) {
+    const isBoss = !!def.boss;
     const body = Bodies.circle(def.x, def.y, def.r, {
-      density: 0.0016, friction: 0.5, frictionAir: 0.016,
+      isStatic: isBoss, // the boss holds its ground; only damage brings it down
+      density: isBoss ? 0.006 : 0.0016, friction: 0.5, frictionAir: 0.016,
       restitution: 0.42, sleepThreshold: 45, label: "wisp",
     });
-    body.game = { kind: "wisp", r: def.r, hue: rand(155, 285), phase: rand(0, 6.28), alive: true };
+    body.game = {
+      kind: "wisp", r: def.r, hue: def.hue ?? rand(155, 285), phase: rand(0, 6.28),
+      alive: true, hp: def.hp ?? 1, maxHp: def.hp ?? 1, boss: isBoss, hitCooldown: 0,
+    };
     Composite.add(world, body);
     state.wisps.push(body);
     return body;
@@ -339,6 +475,7 @@
     overlay.classList.add("hidden");
     messageEl.classList.add("hidden");
     updateHud();
+    if (def.boss) showMessage("Boss battle — the armored Wisp King takes several hits to defeat!");
   }
 
   function currentStoneType() { return state.ammo[0] || null; }
@@ -431,18 +568,44 @@
     if (!wispBody.game || !wispBody.game.alive) return;
     wispBody.game.alive = false;
     const { x, y } = wispBody.position;
-    burst(x, y, 26, {
+    const boss = wispBody.game.boss;
+    burst(x, y, boss ? 60 : 26, {
       colors: ["#a5f3fc", "#f0abfc", "#fde68a", "#ffffff"],
-      sizeMin: 2, sizeMax: 5, life: 0.95, kind: "spark", vxMin: -260, vxMax: 260, vyMin: -300, vyMax: 60,
+      sizeMin: 2, sizeMax: boss ? 8 : 5, life: 0.95, kind: "spark",
+      vxMin: -260, vxMax: 260, vyMin: -300, vyMax: 60,
     });
-    state.shockwaves.push({ x, y, r: 6, maxR: 62, life: 0.5, maxLife: 0.5, color: "#f0abfc" });
-    state.score += 500;
-    floater(x, y - 20, "+500", "#fcd34d");
+    state.shockwaves.push({ x, y, r: 6, maxR: boss ? 150 : 62, life: 0.5, maxLife: 0.5, color: "#f0abfc" });
+    const gain = boss ? 2500 : 500;
+    state.score += gain;
+    floater(x, y - 20, `+${gain}`, "#fcd34d");
     sfx.pop();
-    state.shake = Math.max(state.shake, 4);
+    state.shake = Math.max(state.shake, boss ? 16 : 4);
     Composite.remove(world, wispBody);
     updateHud();
     checkWin();
+  }
+
+  // Damage a wisp. Normal wisps pop immediately; a boss loses one or more HP
+  // per hit (rate-limited) and only pops when its HP reaches zero.
+  function damageWisp(wispBody, amount, reason, rel = 0) {
+    if (!wispBody.game || !wispBody.game.alive) return;
+    const g = wispBody.game;
+    if (!g.boss) { popWisp(wispBody, reason); return; }
+    if (g.hitCooldown > 0) return;
+    g.hitCooldown = 0.26;
+    const dmg = amount ?? (rel > 11 ? 2 : 1);
+    g.hp -= dmg;
+    const { x, y } = wispBody.position;
+    burst(x, y, 12, {
+      colors: ["#fbcfe8", "#fde68a", "#ffffff"], kind: "spark",
+      vxMin: -180, vxMax: 180, vyMin: -200, vyMax: 40, life: 0.6,
+    });
+    state.shockwaves.push({ x, y, r: 4, maxR: 46, life: 0.35, maxLife: 0.35, color: "#fbcfe8" });
+    state.score += 100;
+    floater(x, y - wispBody.game.r - 6, `-${dmg}`, "#fda4af");
+    sfx.bossHit();
+    state.shake = Math.max(state.shake, 6);
+    if (g.hp <= 0) popWisp(wispBody, reason);
   }
 
   Events.on(engine, "collisionStart", (event) => {
@@ -471,8 +634,11 @@
     const otherMass = other.isStatic ? block.mass * 2 : other.mass;
     const eff = Math.min(block.mass, otherMass);
     let factor = 0.075;
-    if (other.game && other.game.kind === "stone") factor = 0.21;
-    else if (other.isStatic) factor = 0.10;
+    if (other.game && other.game.kind === "stone") {
+      // Heavier stones (boulders, fully-inflated inflators) hit much harder.
+      const massBoost = clamp((other.mass || 4) / 4, 0.7, 2.6);
+      factor = 0.21 * massBoost;
+    } else if (other.isStatic) factor = 0.10;
     const dmg = rel * rel * eff * factor;
     damageBlock(block, dmg, contact.x, contact.y);
     if (rel > 6) sfx.thud();
@@ -481,7 +647,7 @@
   function considerWispPop(wispBody, other, rel) {
     if (!wispBody.game || wispBody.game.kind !== "wisp" || !wispBody.game.alive) return;
     const directStone = other.game && other.game.kind === "stone" && rel > 1.6;
-    if (directStone || rel > 5.2) popWisp(wispBody, directStone ? "hit" : "crushed");
+    if (directStone || rel > 5.2) damageWisp(wispBody, null, directStone ? "hit" : "crushed", rel);
   }
 
   // ---------------------------------------------------------------------------
@@ -609,8 +775,43 @@
       retireStone(true);
     } else if (spec.ability === "scatter") {
       scatter(pos, vel);
+    } else if (spec.ability === "uplift") {
+      uplift(pos.x, pos.y);
+      retireStone(true);
+    } else if (spec.ability === "inflate") {
+      s.inflate = 0;
+      s.targetScale = 3.6;
+      s.baseR = s.body.circleRadius;
+      state.shockwaves.push({ x: pos.x, y: pos.y, r: 8, maxR: 90, life: 0.4, maxLife: 0.4, color: "#fb923c" });
+      sfx.inflate();
     }
     updateHud();
+  }
+
+  // Pink Bubble: release a rising lift that floats nearby blocks and wisps up
+  // and off the top of the world. The boss is too heavy to be lifted.
+  function uplift(x, y) {
+    const R = 155;
+    state.shockwaves.push({ x, y, r: 10, maxR: R, life: 0.6, maxLife: 0.6, color: "#ec4899" });
+    burst(x, y, 34, {
+      colors: ["#f9a8d4", "#fbcfe8", "#ffffff", "#f0abfc"], kind: "bubble",
+      vxMin: -90, vxMax: 90, vyMin: -240, vyMax: -70, life: 1.6, sizeMin: 4, sizeMax: 11,
+    });
+    sfx.bubble();
+    for (const bd of Composite.allBodies(world)) {
+      if (bd.isStatic) continue;
+      const g = bd.game;
+      if (g && g.kind === "wisp" && g.boss) continue; // boss is anchored
+      const dx = bd.position.x - x, dy = bd.position.y - y;
+      const d = Math.hypot(dx, dy);
+      if (d > R) continue;
+      const falloff = 1 - d / R;
+      Sleeping.set(bd, false);
+      Body.setVelocity(bd, {
+        x: (dx >= 0 ? 1 : -1) * (2 + 3 * falloff),
+        y: -(16 + 24 * falloff),
+      });
+    }
   }
 
   function detonate(x, y) {
@@ -623,12 +824,18 @@
     state.shake = 15;
     sfx.blast();
 
-    const bodies = Composite.allBodies(world).filter(bd => !bd.isStatic);
+    const bodies = Composite.allBodies(world);
     for (const bd of bodies) {
       const dx = bd.position.x - x, dy = bd.position.y - y;
       const d = Math.hypot(dx, dy);
       if (d > R) continue;
       const falloff = 1 - d / R;
+      // Explosions damage wisps too, including the static boss (no push on it).
+      if (bd.game && bd.game.kind === "wisp" && bd.game.alive) {
+        damageWisp(bd, 2, "blast");
+        continue;
+      }
+      if (bd.isStatic) continue;
       const nx = d > 0.01 ? dx / d : 0;
       const ny = d > 0.01 ? dy / d : -1;
       Sleeping.set(bd, false);
@@ -637,7 +844,6 @@
         y: (ny - 0.45) * bd.mass * 0.055 * falloff,
       });
       if (bd.game && bd.game.kind === "block") damageBlock(bd, 175 * falloff, bd.position.x, bd.position.y);
-      if (bd.game && bd.game.kind === "wisp" && bd.game.alive) popWisp(bd, "blast");
     }
   }
 
@@ -690,6 +896,19 @@
     const vel = Body.getVelocity(s.body);
     const speed = Math.hypot(vel.x, vel.y);
 
+    // Orange Inflator: swell over ~0.4s. Body.scale also grows its mass, so it
+    // turns into a heavy crushing ball as it expands.
+    if (s.inflate !== undefined && s.inflate < 1) {
+      s.inflate = Math.min(1, s.inflate + dt / 0.4);
+      const targetScale = 1 + (s.targetScale - 1) * s.inflate;
+      const curScale = s.body.circleRadius / s.baseR;
+      const k = targetScale / curScale;
+      if (k > 1.001) {
+        Body.scale(s.body, k, k);
+        s.body.game.r = s.body.circleRadius;
+      }
+    }
+
     state.trail.push({ x: pos.x, y: pos.y, life: 0.42 });
     if (state.trail.length > 26) state.trail.shift();
 
@@ -720,7 +939,13 @@
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i];
       p.life -= dt;
-      p.vy += (p.kind === "spark" ? 420 : 900) * dt;
+      if (p.kind === "bubble") {
+        p.vy += -150 * dt;                                   // buoyant, rises
+        p.x += Math.sin((p.maxLife - p.life) * 7 + p.rot) * 26 * dt; // gentle wobble
+        p.vx *= (1 - 0.6 * dt);
+      } else {
+        p.vy += (p.kind === "spark" ? 420 : 900) * dt;
+      }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rot += p.spin * dt;
@@ -746,11 +971,13 @@
     if (state.shake < 0.15) state.shake = 0;
   }
 
-  function updateWispBounds() {
+  function updateWispBounds(dt) {
     for (const w of state.wisps) {
       if (!w.game.alive) continue;
+      if (w.game.hitCooldown > 0) w.game.hitCooldown = Math.max(0, w.game.hitCooldown - dt);
       const p = w.position;
-      if (p.y > H + 70 || p.x < -60 || p.x > WORLD_W + 60) popWisp(w, "fell");
+      // A wisp launched above the top of the world (e.g. by Bubble) is lost.
+      if (p.y > H + 70 || p.y < -90 || p.x < -60 || p.x > WORLD_W + 60) popWisp(w, "fell");
     }
   }
 
@@ -827,7 +1054,7 @@
     updateStone(dt);
     updateSpent(dt);
     updateEffects(dt);
-    updateWispBounds();
+    updateWispBounds(dt);
     checkLoss(dt);
 
     let target;
@@ -1069,6 +1296,15 @@
       ctx.fill();
     }
 
+    // Glossy highlight for the pink bubble.
+    if (type === "bubble") {
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.7, Math.PI * 1.08, Math.PI * 1.62); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.beginPath(); ctx.arc(-r * 0.34, -r * 0.36, r * 0.16, 0, Math.PI * 2); ctx.fill();
+    }
+
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.font = `bold ${Math.round(r * 1.15)}px system-ui, sans-serif`;
     ctx.textAlign = "center";
@@ -1238,6 +1474,51 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
+      if (g.boss) {
+        // Rotating armored ring around the boss.
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(-state.time * 0.6);
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        for (let i = 0; i < 10; i++) {
+          const a = (i * Math.PI * 2) / 10;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r * 1.12, Math.sin(a) * r * 1.12);
+          ctx.lineTo(Math.cos(a) * r * 1.42, Math.sin(a) * r * 1.42);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "rgba(253,224,71,0.5)";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // Crown
+        const cy = y - r * 1.55;
+        ctx.fillStyle = "#fcd34d";
+        ctx.strokeStyle = "#b45309";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.72, cy + 6);
+        ctx.lineTo(x - r * 0.72, cy - 7);
+        ctx.lineTo(x - r * 0.36, cy + 1);
+        ctx.lineTo(x, cy - 13);
+        ctx.lineTo(x + r * 0.36, cy + 1);
+        ctx.lineTo(x + r * 0.72, cy - 7);
+        ctx.lineTo(x + r * 0.72, cy + 6);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = "rgba(24,10,32,0.85)";
+        for (const ex of [-0.3, 0.3]) {
+          ctx.beginPath(); ctx.arc(x + ex * r, y - r * 0.04, r * 0.13, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
       for (let i = 0; i < 3; i++) {
         const a = state.time * 1.9 + g.phase + (i * Math.PI * 2) / 3;
         ctx.fillStyle = "rgba(255,255,255,0.85)";
@@ -1262,13 +1543,15 @@
     }
     if (state.activeStone) {
       const bd = state.activeStone.body;
-      if (state.activeStone.type === "bomber" && !state.abilityUsed) {
+      const t = state.activeStone.type;
+      if (!state.abilityUsed && (t === "bomber" || t === "bubble" || t === "inflator")) {
+        const rgb = t === "bubble" ? "236,72,153" : t === "inflator" ? "251,146,60" : "255,180,80";
         const pulse = 0.5 + 0.5 * Math.sin(state.time * 12);
-        ctx.strokeStyle = `rgba(255,180,80,${0.35 + pulse * 0.5})`;
+        ctx.strokeStyle = `rgba(${rgb},${0.35 + pulse * 0.5})`;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(bd.position.x, bd.position.y, bd.game.r + 7 + pulse * 3, 0, Math.PI * 2); ctx.stroke();
       }
-      drawStoneShape(bd.position.x, bd.position.y, bd.game.r, state.activeStone.type, bd.angle);
+      drawStoneShape(bd.position.x, bd.position.y, bd.game.r, t, bd.angle);
     } else if (!state.levelFailed && !state.levelComplete && state.ammo.length > 0 && state.reloadTimer <= 0) {
       const p = state.dragging ? state.dragPos : ANCHOR;
       drawStoneShape(p.x, p.y, STONE_TYPES[currentStoneType()].r, currentStoneType());
@@ -1287,7 +1570,15 @@
     for (const p of state.particles) {
       const a = clamp(p.life / p.maxLife, 0, 1);
       ctx.globalAlpha = a;
-      if (p.kind === "spark") {
+      if (p.kind === "bubble") {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, p.size * (0.6 + a * 0.4)), 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.beginPath();
+        ctx.arc(p.x - p.size * 0.3, p.y - p.size * 0.3, Math.max(0.6, p.size * 0.2), 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.kind === "spark") {
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
         ctx.shadowBlur = 8;
@@ -1345,6 +1636,26 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawBossBar() {
+    const boss = state.wisps.find(w => w.game.boss && w.game.alive);
+    if (!boss) return;
+    const barW = 340, x = (W - barW) / 2, y = 26;
+    ctx.fillStyle = "rgba(6,10,24,0.72)";
+    roundRect(x - 14, y - 14, barW + 28, 46, 12); ctx.fill();
+    ctx.fillStyle = "#f472b6";
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("WISP KING", x, y + 1);
+    const ratio = clamp(boss.game.hp / boss.game.maxHp, 0, 1);
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    roundRect(x, y + 9, barW, 12, 6); ctx.fill();
+    if (ratio > 0) {
+      ctx.fillStyle = ratio > 0.5 ? "#f472b6" : "#fbbf24";
+      roundRect(x, y + 9, Math.max(6, barW * ratio), 12, 6); ctx.fill();
+    }
+  }
+
   function draw() {
     ctx.clearRect(0, 0, W, H);
     drawSky();
@@ -1375,6 +1686,8 @@
     vig.addColorStop(1, "rgba(4,8,20,0.42)");
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
+
+    drawBossBar();
   }
 
   // ---------------------------------------------------------------------------
@@ -1475,7 +1788,7 @@
   if (globalThis.__SLINGSTONE_TEST__) {
     globalThis.__slingstone = {
       state, engine, world, LEVELS, STONE_TYPES,
-      loadLevel, activateAbility, popWisp, launch,
+      loadLevel, activateAbility, popWisp, damageWisp, launch, uplift, detonate,
       bodies: () => Composite.allBodies(world),
       toggleMute,
     };

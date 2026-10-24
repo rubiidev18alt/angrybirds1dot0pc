@@ -153,7 +153,7 @@ console.log("Test: Matter.js engine is wired up");
 
 step(0.2);
 assert(game.engine.world.bodies.length > 5, "Matter world contains ground, walls, blocks and wisps");
-assert(game.LEVELS.length === 3, "three levels are defined");
+assert(game.LEVELS.length === 10, "ten levels are defined");
 assert(blockCount() === game.LEVELS[0].blocks.length, "level 1 blocks were created");
 assert(aliveWisps() === game.LEVELS[0].wisps.length, "level 1 wisps were created");
 assert(Matter.version === "0.20.0", `vendored Matter.js build is present (v${Matter.version})`);
@@ -219,15 +219,28 @@ function findWispHit() {
   return null;
 }
 
-for (let level = 1; level <= 3; level++) {
+for (let level = 1; level <= game.LEVELS.length; level++) {
   const hit = findWispHit();
   assert(hit !== null, `level ${level} wisps are reachable with a normal drag`);
   if (hit) console.log(`  level ${level} hit with ${hit.drag}px at ${hit.degrees} deg`);
-  if (level < 3) {
+  if (level < game.LEVELS.length) {
     // Jump straight to the next level via the win path for the reachability check.
     game.loadLevel(level);
     step(0.2);
   }
+}
+
+// ---------------------------------------------------------------------------
+console.log("Test: every level starts stable (no overlap explosions / self-popping)");
+
+for (let i = 0; i < game.LEVELS.length; i++) {
+  game.loadLevel(i);
+  step(0.2);
+  const w0 = aliveWisps(), b0 = blockCount(), s0 = score();
+  step(3);
+  assert(aliveWisps() === w0, `level ${i + 1}: no wisp self-pops while settling`);
+  assert(blockCount() === b0, `level ${i + 1}: no block self-destructs while settling`);
+  assert(score() === s0, `level ${i + 1}: no self-scoring while settling`);
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +295,73 @@ game.activateAbility();
 const hpAfter = game.state.blocks.reduce((sum, bd) => sum + bd.game.hp, 0);
 assert(hpAfter < hpBefore || blockCount() < game.LEVELS[0].blocks.length, "bomber blast damages nearby structures");
 assert(game.state.shockwaves.length > 0, "bomber produces a shockwave effect");
+
+// --- Bubble (pink): uplift should float a nearby wisp off the top of the world ---
+game.loadLevel(0); step(0.2);
+const bubbleTarget = game.state.wisps.find(w => w.game.alive);
+const wispsBeforeBubble = aliveWisps();
+game.uplift(bubbleTarget.position.x, bubbleTarget.position.y);
+step(0.8);
+assert(aliveWisps() < wispsBeforeBubble, "Bubble uplift floats a nearby wisp away");
+
+// --- Inflator (orange): should grow in radius and mass ---
+game.loadLevel(0); step(0.2);
+game.state.ammo = ["inflator"];
+aim(105, 30);
+step(0.2);
+const infBody = game.state.activeStone.body;
+const rBefore = infBody.circleRadius, mBefore = infBody.mass;
+game.activateAbility();
+step(0.45);
+assert(infBody.circleRadius > rBefore * 2.3, `Inflator swells to a big radius (${rBefore.toFixed(1)} -> ${infBody.circleRadius.toFixed(1)})`);
+assert(infBody.mass > mBefore * 2, `Inflator gains crushing mass (${mBefore.toFixed(1)} -> ${infBody.mass.toFixed(1)})`);
+assert(game.state.abilityUsed, "inflate ability is consumed after use");
+
+// --- Boulder: big, heavy, strong (no ability) ---
+assert(game.STONE_TYPES.boulder.heavy === true, "Boulder is flagged as a heavy stone");
+assert(game.STONE_TYPES.boulder.r > game.STONE_TYPES.pebble.r, "Boulder is bigger than a Pebble");
+game.loadLevel(0); step(0.2);
+game.state.ammo = ["boulder"];
+aim(110, 28);
+step(0.1);
+const boulderMass = game.state.activeStone.body.mass;
+game.loadLevel(0); step(0.2);
+game.state.ammo = ["pebble"];
+aim(110, 28);
+step(0.1);
+const pebbleMass = game.state.activeStone.body.mass;
+assert(boulderMass > pebbleMass * 2, `Boulder is far heavier than a Pebble (${boulderMass.toFixed(1)} vs ${pebbleMass.toFixed(1)})`);
+
+// --- New stones are all registered and renderable glyphs exist ---
+for (const type of ["bubble", "inflator", "boulder"]) {
+  const spec = game.STONE_TYPES[type];
+  assert(spec && typeof spec.glyph === "string" && spec.glyph.length > 0, `${type} stone type is defined with a glyph`);
+}
+
+// ---------------------------------------------------------------------------
+console.log("Test: boss level (level 10)");
+
+game.loadLevel(9);
+step(0.2);
+assert(game.LEVELS[9].boss === true, "level 10 is flagged as a boss level");
+const boss = game.state.wisps.find(w => w.game.boss);
+assert(!!boss, "level 10 spawns a boss wisp");
+assert(boss.game.hp > 1, `the boss has multiple hit points (${boss.game.hp})`);
+assert(boss.isStatic === true, "the boss holds its ground (static body)");
+const bossHp0 = boss.game.hp;
+game.damageWisp(boss, 1, "test");
+assert(boss.game.hp === bossHp0 - 1, "a single hit removes one boss HP, not the whole boss");
+// The boss must not be cheese-able by the Bubble lift.
+const bossY0 = boss.position.y;
+game.uplift(boss.position.x, boss.position.y);
+step(0.4);
+assert(Math.abs(boss.position.y - bossY0) < 1, "the boss is immune to Bubble lift");
+// Clear helpers, then whittle the boss down — defeating it wins the level.
+for (const w of [...game.state.wisps]) if (!w.game.boss) game.popWisp(w, "test");
+let guard = 0;
+while (boss.game.alive && guard++ < 20) { game.damageWisp(boss, 1, "test"); step(0.35); }
+assert(!boss.game.alive, "the boss pops once its HP reaches zero");
+assert(game.state.levelComplete, "defeating the boss and its helpers completes level 10");
 
 // ---------------------------------------------------------------------------
 console.log("Test: winning awards stars and shows the overlay");

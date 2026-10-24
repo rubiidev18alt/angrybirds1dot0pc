@@ -16,6 +16,16 @@ Then open the preview URL shown by Arena, or `http://localhost:8000`. Opening `i
 
 ![Level 3: Sky Keep](docs/preview-level3.jpg)
 
+## What's new in v2.1
+
+- **Ten levels.** Seven brand-new levels (4–10) expand the campaign with pillars, turrets, glass towers and stacked fortresses.
+- **A boss on level 10 — "The Wisp King."** A big crowned, armored wisp with its own **HP bar**. It holds its ground (a static body), shrugs off the Bubble lift, and soaks up multiple hits — land heavy strikes or chain explosions to bring it down. Worth 2,500 points.
+  ![The Wisp King boss](docs/preview-boss.jpg)
+- **Three new stones:**
+  - **Bubble (pink)** ◎ — *Uplift*: release a rising column that floats nearby blocks and wisps up and off the top of the world (the boss is too heavy to lift). ![Bubble uplift](docs/preview-bubble.jpg)
+  - **Inflator (orange)** ◉ — *Inflate*: swell into a giant heavy ball that crushes everything it touches; it gains mass as it grows, so it hits far harder. ![Inflator](docs/preview-inflator.jpg)
+  - **Boulder** ◆ — a big, heavy, strong stone with no ability but enormous impact damage.
+
 ## What's new in v2.0
 
 - **Real rigid-body physics.** The hand-rolled physics loop was replaced with [Matter.js](https://brm.io/matter-js/) 0.20.0 (MIT, vendored locally). Blocks stack, topple, tumble and transfer momentum properly, with sleeping bodies for stability.
@@ -65,7 +75,7 @@ The legacy rights-gated porting tooling remains in `tools/port_assets.py`, `tool
 python3 tools/build_release.py
 ```
 
-This creates `dist/Slingstone-2.0.0.zip` containing the game, the vendored Matter.js build, its license, notices, docs, and preview images.
+This creates `dist/Slingstone-2.1.0.zip` containing the game, the vendored Matter.js build, its license, notices, docs, and preview images.
 
 ## Validation
 
@@ -76,7 +86,7 @@ python3 tools/build_release.py
 python3 tools/test_port_assets.py
 ```
 
-`tools/test_game.js` runs the **real** game loop and Matter.js physics against a stub DOM/canvas in Node. Its 45 assertions cover repeated shots, structure stability, out-of-stones handling, reachability of all three levels, destructible blocks, each ability, star awards, camera/flyover/peek, and the sound toggle. No browser or `npm install` is needed because Matter.js is vendored.
+`tools/test_game.js` runs the **real** game loop and Matter.js physics against a stub DOM/canvas in Node. Its 101 assertions cover repeated shots, structure stability, out-of-stones handling, reachability and settling stability of all ten levels, destructible blocks, every ability (including the three new stones and the boss), star awards, camera/flyover/peek, and the sound toggle. No browser or `npm install` is needed because Matter.js is vendored.
 
 GitHub Actions runs these checks on pushes, pull requests, and `v*-slingstone` tags.
 

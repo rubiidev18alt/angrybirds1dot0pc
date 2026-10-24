@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "dist"
 OUT_DIR.mkdir(exist_ok=True)
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 ZIP_PATH = OUT_DIR / f"Slingstone-{VERSION}.zip"
 
 FILES = [
@@ -30,6 +30,9 @@ FILES = [
     "docs/RELEASE_NOTES_SLINGSTONE.md",
     "docs/preview-gameplay.jpg",
     "docs/preview-level3.jpg",
+    "docs/preview-boss.jpg",
+    "docs/preview-inflator.jpg",
+    "docs/preview-bubble.jpg",
 ]
 
 

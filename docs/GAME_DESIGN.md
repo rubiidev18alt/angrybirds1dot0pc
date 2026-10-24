@@ -29,7 +29,8 @@ Since v2.0 the game runs on [Matter.js](https://brm.io/matter-js/) 0.20.0 (MIT),
 - **Camera:** the world is 1520 px wide against a 960 px viewport. On load a flyover pans out to the targets and back; during flight the camera tracks the shot; **Peek** (hold button or `V`) pans to the far end. World rendering is translated by `-camera`, while sky/cloud layers use fractional parallax factors.
 - **Rendering:** HTML5 Canvas 2D only. Three procedurally generated hill layers, drifting clouds, twinkling stars, a gradient sun with halo, textured soil and grass tufts, gradient-shaded materials with grain/speckle/nail details, damage cracks, glowing wisps with dashed orbit rings and orbiting sparks, debris chunks, spark particles, expanding shockwaves, floating score text, a shot trail, and a vignette. `ctx.save/translate/rotate/restore` is used for rotated bodies.
 - **Audio:** Web Audio API oscillators and a generated noise buffer. No audio files. Sounds cover launch, thud, wood/glass/stone breakage, wisp pop, blast, surge, split, win fanfare, and failure. A mute toggle is provided.
-- **State:** three handcrafted levels (`First Flight`, `Timber Yard`, `Sky Keep`) defined declaratively in `game.js` with top-left block coordinates converted to Matter's center-based rectangles.
+- **State:** ten handcrafted levels (`First Flight` → `The Wisp King`) defined declaratively in `game.js` with top-left block coordinates converted to Matter's center-based rectangles. Level 10 is a boss fight: a static, crowned "Wisp King" with multiple HP and its own health bar. It loses HP from impacts/explosions (rate-limited) and is immune to the Bubble lift; only depleting its HP pops it.
+- **Stone types:** `pebble`, `bolt` (surge), `bomber` (blast), `splitter` (scatter), `bubble` (uplift — floats nearby bodies up and off the top), `inflator` (inflate — grows in radius and mass via `Body.scale`), and `boulder` (heavy passive damage dealer with high density).
 
 ## Why this is not a port
 
@@ -49,7 +50,7 @@ Then open the provided preview URL or `http://localhost:8000`.
 python3 tools/build_release.py
 ```
 
-This creates `dist/Slingstone-2.0.0.zip` containing the game, the vendored Matter.js build and its license, notices, docs, and preview images.
+This creates `dist/Slingstone-2.1.0.zip` containing the game, the vendored Matter.js build and its license, notices, docs, and preview images.
 
 ## Regression tests
 
