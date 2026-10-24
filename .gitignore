@@ -1,0 +1,18 @@
+# Authorized source packages and local builds stay out of Git until cleared.
+incoming/
+out/
+build/
+dist/
+*.ipa
+*.zip
+*.exe
+*.dll
+*.so
+*.dylib
+.DS_Store
+__MACOSX/
+*.pyc
+__pycache__/
+.venv/
+venv/
+.env

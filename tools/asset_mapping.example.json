@@ -1,0 +1,8 @@
+{
+  "strip_prefix": "Payload/Angry Birds.app/",
+  "dest_prefix": "AngryBirds/Resources/",
+  "exact": {
+    "Payload/Angry Birds.app/Icon.png": "AngryBirds/Icon.png",
+    "Payload/Angry Birds.app/Default.png": "AngryBirds/Splash.png"
+  }
+}
