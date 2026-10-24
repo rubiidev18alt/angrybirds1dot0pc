@@ -35,7 +35,7 @@ You can upload these as chat attachments, or push them to this repository and te
 5. Add build metadata, checksums, and a reproducible release script.
 6. Tag the release and upload the PC build — **only if the supplied license permits public distribution**.
 
-See [docs/PORTING_PLAN.md](docs/PORTING_PLAN.md) for the technical approach, [docs/RIGHTS_CHECKLIST.md](docs/RIGHTS_CHECKLIST.md) for the publication gate, [docs/PERMISSION_REQUEST_TEMPLATE.md](docs/PERMISSION_REQUEST_TEMPLATE.md) if you still need to obtain written authorization, and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known differences.
+See [docs/PORTING_PLAN.md](docs/PORTING_PLAN.md) for the technical approach, [docs/RIGHTS_CHECKLIST.md](docs/RIGHTS_CHECKLIST.md) for the publication gate, [docs/PERMISSION_DOCUMENTS_INDEX.md](docs/PERMISSION_DOCUMENTS_INDEX.md) for the draft permission/agreement documents (Markdown and PDF), and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known differences.
 
 ## Validation
 
