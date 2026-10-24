@@ -24,6 +24,13 @@ Do **not** commit, tag, or release any third-party game files until every applic
 - [ ] A `SHA256SUMS` file and build manifest are generated for the release artifacts.
 - [ ] If the authorization is personal-use or private-only, no public release is created; the build stays private or is delivered only to the rights holder.
 
+## Required signed documents
+
+- [ ] `docs/PERMISSION_AGREEMENT_DRAFT.md` has been completed and signed by an authorized representative of the rights holder.
+- [ ] `docs/OWNER_RIGHTS_ATTESTATION.md` has been signed by the repository owner, with the executed agreement attached as Exhibit A.
+- [ ] Alternatively, an equivalent official license/permission letter from the rights holder’s legal or licensing department is included.
+- [ ] The signed document is stored in `docs/` or `incoming/` and referenced in `THIRD_PARTY_NOTICES.md`.
+
 ## Stop conditions
 
 If any item above cannot be confirmed, stop the publication workflow and request clarification. Do not work around missing permission by extracting assets from public archives.

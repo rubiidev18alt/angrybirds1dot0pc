@@ -1,7 +1,5 @@
 # Third-party notices
 
-No third-party game assets are currently included in this repository.
+No third-party game assets are currently included in this repository or in the Slingstone release.
 
-Once written authorization is supplied, the full license text, required attributions, copyright notices, and any trademark notices must be placed in this file and included with every release that contains those materials.
-
-Do not remove or alter notices required by the rights holder.
+The Slingstone game uses only original code, procedural Canvas graphics, and Web Audio API synthesized sounds. It includes no third-party images, audio, fonts, or game data.

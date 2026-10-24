@@ -1,50 +1,63 @@
-# Angry Birds 1.0 PC port workspace
+# Slingstone
 
-This repository is being prepared for a PC port of the legacy iOS game. **No third-party game binaries, artwork, audio, or level data are included yet.**
+An original open-source slingshot physics game for PC browsers. Built with HTML5 Canvas, custom lightweight physics, procedural graphics, and synthesized audio. **No third-party game assets are used.**
 
-> **Legal gate:** Angry Birds 1.0 and its associated assets are proprietary. Public availability on archive.org does not, by itself, grant redistribution rights. This project will only incorporate those materials after the repository owner supplies verifiable written permission or a suitable license. See [docs/RIGHTS_CHECKLIST.md](docs/RIGHTS_CHECKLIST.md).
+> This repository was originally created for a proposed Angry Birds 1.0 PC port. That work is paused pending written permission from the rights holder. Slingstone is a separate, lawful deliverable and does not include or require any Angry Birds binaries, artwork, audio, level data, or trademarks.
 
-## Current status
+## Play
 
-- GitHub remote: <https://github.com/rubiidev18alt/angrybirds1dot0pc>
-- Working branch: `arena/e2faf217-angrybirds1dot0pc`
-- The IPA was uploaded to `origin/master` (commit `8363b44`) and has been inventoried locally in the gitignored `incoming/` directory. It is **not** committed to this branch and is **not** published.
-- archive.org metadata and the PC ZIP's internal listing are reachable through the page-fetch tool, but the 36.7 MB `AngryBirds.zip` binary cannot be downloaded from this sandbox with `curl`/`wget`. It still needs to be uploaded to the repo or attached in chat.
-- A rights-gated inventory/reconciliation tool is available in [`tools/port_assets.py`](tools/port_assets.py).
-- Written permission/license allowing public redistribution is still missing.
-- The repository currently has **no release**, because the PC base file and rights verification are still pending.
+Run a local server:
 
-See [docs/IPA_INVENTORY.md](docs/IPA_INVENTORY.md), [docs/PC_BASE_METADATA.md](docs/PC_BASE_METADATA.md), and [docs/PC_BASE_KEY_FILES.md](docs/PC_BASE_KEY_FILES.md) for the intake findings.
+```bash
+python3 -m http.server 8000 --bind 0.0.0.0
+```
 
-## What I need next
+Then open the preview URL shown by Arena, or `http://localhost:8000`.
 
-The IPA has been received and inventoried locally (see [docs/IPA_INVENTORY.md](docs/IPA_INVENTORY.md)). Still needed:
+You can also open `index.html` directly in a modern browser, though a local server is recommended.
 
-1. The `AngryBirds.zip` PC base archive (36.7 MB), uploaded to this repo or attached in chat. The sandbox cannot download it from archive.org directly, despite being able to read the item metadata and ZIP listing.
-2. Written permission or a license that explicitly covers public redistribution of the game binaries and assets on GitHub Releases.
-3. Optional: an asset-mapping file if the PC base uses different paths or filenames than the IPA.
+## Controls
 
-You can upload these as chat attachments, or push them to this repository and tell me the branch/commit. Large binaries should preferably stay out of Git until the rights check passes; see `.gitignore`.
+- Click/touch and drag the stone back from the slingshot.
+- Release to launch.
+- Pop every glowing orb to complete the level.
+- Press **Restart** to retry the current level.
+- Press **Next Level** after completing a level.
 
-## Planned workflow
+## Files
 
-1. Verify the rights and license scope.
-2. Inventory and hash the contents of both packages.
-3. Generate a reconciliation plan: identical, missing, extra, and mismatched assets.
-4. Apply an authorized mapping to rebuild the PC package.
-5. Add build metadata, checksums, and a reproducible release script.
-6. Tag the release and upload the PC build — **only if the supplied license permits public distribution**.
+| File | Purpose |
+| --- | --- |
+| `index.html` | Game page and UI |
+| `style.css` | Layout and styling |
+| `game.js` | Original game logic, physics, rendering, and audio |
+| `docs/GAME_DESIGN.md` | Design notes |
+| `tools/build_release.py` | Builds the release zip |
 
-See [docs/PORTING_PLAN.md](docs/PORTING_PLAN.md) for the technical approach, [docs/RIGHTS_CHECKLIST.md](docs/RIGHTS_CHECKLIST.md) for the publication gate, [docs/PERMISSION_DOCUMENTS_INDEX.md](docs/PERMISSION_DOCUMENTS_INDEX.md) for the draft permission/agreement documents (Markdown and PDF), and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known differences.
+The legacy rights-gated porting tooling remains in `tools/port_assets.py`, `tools/test_port_assets.py`, and the other documents under `docs/`. See [docs/PERMISSION_DOCUMENTS_INDEX.md](docs/PERMISSION_DOCUMENTS_INDEX.md) for the draft permission/agreement documents. Nothing from the paused port attempt is included in the Slingstone release.
+
+## Build the release archive
+
+```bash
+python3 tools/build_release.py
+```
+
+This creates `dist/Slingstone-1.0.0.zip` containing only the original game files.
 
 ## Validation
 
-The rights-gated tooling has a synthetic self-test that never uses real game files:
-
 ```bash
+node --check game.js
+python3 tools/build_release.py
 python3 tools/test_port_assets.py
 ```
 
-It is also run in GitHub Actions on pushes and pull requests.
+GitHub Actions runs these checks on pushes and pull requests.
+
+## License
+
+Original game code and documentation are licensed under the MIT License. See [LICENSE](LICENSE).
+
+Slingstone is an independent original game. It is not affiliated with, endorsed by, or sponsored by Rovio Entertainment Ltd. or any other game publisher.
 
 *This repository is maintained by the project owner; this document is not legal advice.*
