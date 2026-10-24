@@ -1,10 +1,12 @@
 # Technical port plan
 
-## Observed constraints
+## Observed constraints (updated after intake)
 
-- The build sandbox can reach GitHub but cannot reach archive.org over HTTP or HTTPS. Authorized packages must be supplied locally, as chat attachments, or through an allowed host such as a private GitHub repository.
-- A truly 100% accurate PC port requires the original asset bundle and, ideally, the original source or a compatible PC runtime. If only compiled binaries are supplied, exact behavioral parity cannot be guaranteed.
-- Encrypted or DRM-protected IPA payloads may not be directly usable. Use only a payload that the rights holder is authorized and technically able to provide.
+- The supplied IPA was found on `origin/master` and copied locally to the gitignored `incoming/` directory. Its inventory is recorded in [IPA_INVENTORY.md](IPA_INVENTORY.md). It is **not** committed and must not be published until the rights checklist passes.
+- The build sandbox can reach GitHub and the archive.org metadata/listing pages through the page-fetch tool, but direct `curl`/`wget` downloads from `archive.org` and its storage subdomains fail. The 36.7 MB `AngryBirds.zip` binary has therefore **not** been downloaded. Metadata and the ZIP's internal listing are recorded in [PC_BASE_METADATA.md](PC_BASE_METADATA.md) and [PC_BASE_KEY_FILES.md](PC_BASE_KEY_FILES.md).
+- The archive.org item's user reviews contain malware/DRM warnings. Do not execute `AngryBirds.exe` or `AppUpWrapper.dll` until provenance and safety are verified.
+- A truly 100% accurate PC port requires the original asset bundle and, ideally, the original source or a compatible PC runtime. If only compiled binaries are supplied, exact behavioral parity cannot be guaranteed. The PC base is already a distinct Windows build with different script sizes and many more level packs than the IPA, so "accurate iOS 1.0 parity" requires explicit reconciliation, not a simple copy.
+- Encrypted or DRM-protected IPA payloads may not be directly usable. Use only a payload that the rights holder is authorized and technically able to provide. The supplied IPA shows no `SC_Info`/`_CodeSignature` entries in its zip listing.
 
 ## Pipeline
 

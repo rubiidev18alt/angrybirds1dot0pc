@@ -8,20 +8,23 @@ This repository is being prepared for a PC port of the legacy iOS game. **No thi
 
 - GitHub remote: <https://github.com/rubiidev18alt/angrybirds1dot0pc>
 - Working branch: `arena/e2faf217-angrybirds1dot0pc`
-- archive.org downloads are blocked from this build sandbox, so the source packages must be supplied by the rights holder.
+- The IPA was uploaded to `origin/master` (commit `8363b44`) and has been inventoried locally in the gitignored `incoming/` directory. It is **not** committed to this branch and is **not** published.
+- archive.org metadata and the PC ZIP's internal listing are reachable through the page-fetch tool, but the 36.7 MB `AngryBirds.zip` binary cannot be downloaded from this sandbox with `curl`/`wget`. It still needs to be uploaded to the repo or attached in chat.
 - A rights-gated inventory/reconciliation tool is available in [`tools/port_assets.py`](tools/port_assets.py).
-- The repository currently has **no release**, because the required files and rights verification are still pending.
+- Written permission/license allowing public redistribution is still missing.
+- The repository currently has **no release**, because the PC base file and rights verification are still pending.
+
+See [docs/IPA_INVENTORY.md](docs/IPA_INVENTORY.md), [docs/PC_BASE_METADATA.md](docs/PC_BASE_METADATA.md), and [docs/PC_BASE_KEY_FILES.md](docs/PC_BASE_KEY_FILES.md) for the intake findings.
 
 ## What I need next
 
-Please provide:
+The IPA has been received and inventoried locally (see [docs/IPA_INVENTORY.md](docs/IPA_INVENTORY.md)). Still needed:
 
-1. The original `Angry Birds 1.0.ipa` package, in a form you are authorized to use and redistribute.
-2. The `AngryBirds.zip` PC base archive, or its extracted source/build tree.
-3. Written permission or a license that explicitly covers public redistribution of the game binaries and assets on GitHub Releases.
-4. Optional: an asset-mapping file if the PC base uses different paths or filenames than the IPA.
+1. The `AngryBirds.zip` PC base archive (36.7 MB), uploaded to this repo or attached in chat. The sandbox cannot download it from archive.org directly, despite being able to read the item metadata and ZIP listing.
+2. Written permission or a license that explicitly covers public redistribution of the game binaries and assets on GitHub Releases.
+3. Optional: an asset-mapping file if the PC base uses different paths or filenames than the IPA.
 
-You can upload these as chat attachments, or push them to a private GitHub repository and grant `rubiidev18alt` access. Large binaries should preferably stay out of Git until the rights check passes; see `.gitignore`.
+You can upload these as chat attachments, or push them to this repository and tell me the branch/commit. Large binaries should preferably stay out of Git until the rights check passes; see `.gitignore`.
 
 ## Planned workflow
 
