@@ -3,244 +3,536 @@
  * Copyright (c) 2026 rubiidev18alt
  * Licensed under the MIT License. See LICENSE.
  *
+ * Physics: Matter.js 0.20.0 (MIT) - see vendor/MATTER_LICENSE.txt.
  * All graphics are drawn procedurally with Canvas 2D.
  * All sounds are synthesized with the Web Audio API.
- * No third-party game assets are used.
+ *
+ * No Angry Birds (or other third-party) artwork, audio, characters, level
+ * data, binaries, or trademarks are used. Genre mechanics (a slingshot,
+ * breakable structures, tappable shot abilities, star ratings) are implemented
+ * here in original code with original art.
  */
 
 (() => {
   "use strict";
 
+  const { Engine, Bodies, Body, Composite, Events, Query, Sleeping } = Matter;
+
+  // ---------------------------------------------------------------------------
+  // Constants and tuning
+  // ---------------------------------------------------------------------------
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
-  const GROUND_Y = 540;
-  const GRAVITY = 900; // px per second^2
-  const MAX_DRAG = 120;
-  const LAUNCH_POWER = 8.0; // max launch speed = MAX_DRAG * LAUNCH_POWER = 960 px/s
-  const STONE_RADIUS = 13;
-  const GRAB_RADIUS = 110;
-  const STONE_RETIRE_DELAY = 0.35; // seconds a spent stone lingers before the next one loads
-  const STONE_MAX_AGE = 3.5;
+  const GROUND_Y = 520;
+  const WORLD_W = 1520;
+  const ANCHOR = { x: 190, y: 396 };
+  const FORK = { left: ANCHOR.x - 26, right: ANCHOR.x + 26, y: ANCHOR.y - 34 };
+  const MAX_DRAG = 125;
+  const LAUNCH_SPEED = 18.5;        // px per 60 Hz step at a full pull (~1110 px/s)
+  const GRAB_RADIUS = 118;
+  const STEP_MS = 1000 / 60;
+  const GRAVITY_SCALE = 0.0009;
+  const STEP_ACCEL = GRAVITY_SCALE * STEP_MS * STEP_MS; // px per step^2
+  const RELOAD_DELAY = 0.35;
+  const STONE_MAX_AGE = 4.5;
+  const CAM_MAX = WORLD_W - W;
 
-  const levelLabel = document.getElementById("levelLabel");
-  const scoreLabel = document.getElementById("scoreLabel");
-  const shotsLabel = document.getElementById("shotsLabel");
-  const powerLabel = document.getElementById("powerLabel");
-  const restartBtn = document.getElementById("restartBtn");
-  const nextBtn = document.getElementById("nextBtn");
-  const messageEl = document.getElementById("message");
+  const MATERIALS = {
+    wood:  { density: 0.0014, hp: 105, restitution: 0.06, friction: 0.68, score: 60 },
+    glass: { density: 0.0009, hp: 42,  restitution: 0.02, friction: 0.35, score: 60 },
+    stone: { density: 0.0035, hp: 270, restitution: 0.03, friction: 0.85, score: 90 },
+  };
+
+  const STONE_TYPES = {
+    pebble:   { r: 15, density: 0.006,  glyph: "●", name: "Pebble",   color: "#9aa8bd", ability: null },
+    bolt:     { r: 14, density: 0.0052, glyph: "⚡", name: "Bolt",     color: "#5eead4", ability: "surge" },
+    bomber:   { r: 17, density: 0.0072, glyph: "✸", name: "Bomber",   color: "#fb923c", ability: "blast" },
+    splitter: { r: 15, density: 0.0055, glyph: "✦", name: "Splitter", color: "#c4b5fd", ability: "scatter" },
+  };
+
+  const ABILITY_TEXT = {
+    pebble: "No special ability — a solid, reliable stone.",
+    bolt: "<strong>Bolt:</strong> click, tap, or press Space mid-flight for a burst of speed.",
+    bomber: "<strong>Bomber:</strong> click, tap, or press Space mid-flight to detonate.",
+    splitter: "<strong>Splitter:</strong> click, tap, or press Space mid-flight to split into three.",
+  };
+
+  // Block definitions use top-left x/y for easy level authoring.
+  const b = (type, x, y, w, h) => ({ type, x, y, w, h });
+  const wisp = (x, y, r = 16) => ({ x, y, r });
 
   const LEVELS = [
     {
-      shots: 5,
-      crates: [
-        { x: 560, y: 492, w: 48, h: 48 },
-        { x: 560, y: 444, w: 48, h: 48 },
-        { x: 560, y: 396, w: 48, h: 48 },
+      name: "First Flight",
+      ammo: ["pebble", "pebble", "bolt", "bomber"],
+      blocks: [
+        b("wood", 686, 416, 24, 104),
+        b("wood", 830, 416, 24, 104),
+        b("wood", 666, 396, 208, 20),
+        b("glass", 750, 356, 40, 40),
+        b("wood", 906, 476, 52, 44),
       ],
-      orbs: [{ x: 584, y: 366, r: 18 }],
+      wisps: [wisp(770, 339), wisp(770, 504), wisp(990, 504)],
     },
     {
-      shots: 6,
-      crates: [
-        { x: 520, y: 492, w: 48, h: 48 },
-        { x: 568, y: 492, w: 48, h: 48 },
-        { x: 616, y: 492, w: 48, h: 48 },
-        { x: 544, y: 444, w: 48, h: 48 },
-        { x: 592, y: 444, w: 48, h: 48 },
-        { x: 568, y: 396, w: 48, h: 48 },
+      name: "Timber Yard",
+      ammo: ["pebble", "bolt", "bomber", "splitter", "pebble"],
+      blocks: [
+        b("stone", 806, 472, 170, 48),
+        b("wood", 816, 400, 22, 72),
+        b("wood", 944, 400, 22, 72),
+        b("wood", 806, 380, 160, 20),
+        b("glass", 864, 340, 40, 40),
+        b("glass", 920, 340, 40, 40),
+        b("wood", 1110, 440, 22, 80),
+        b("wood", 1240, 440, 22, 80),
+        b("wood", 1096, 420, 180, 20),
+        b("stone", 1160, 396, 52, 24),
       ],
-      orbs: [
-        { x: 568, y: 366, r: 18 },
-        { x: 640, y: 468, r: 18 },
-      ],
+      wisps: [wisp(884, 323), wisp(1000, 504), wisp(1186, 504), wisp(1330, 504)],
     },
     {
-      shots: 7,
-      crates: [
-        { x: 500, y: 492, w: 44, h: 44 },
-        { x: 544, y: 492, w: 44, h: 44 },
-        { x: 588, y: 492, w: 44, h: 44 },
-        { x: 632, y: 492, w: 44, h: 44 },
-        { x: 522, y: 448, w: 44, h: 44 },
-        { x: 566, y: 448, w: 44, h: 44 },
-        { x: 610, y: 448, w: 44, h: 44 },
-        { x: 544, y: 404, w: 44, h: 44 },
-        { x: 588, y: 404, w: 44, h: 44 },
-        { x: 566, y: 360, w: 44, h: 44 },
+      name: "Sky Keep",
+      ammo: ["bolt", "bomber", "splitter", "pebble", "pebble", "bomber"],
+      blocks: [
+        b("stone", 782, 480, 320, 40),
+        b("stone", 782, 376, 28, 104),
+        b("stone", 1074, 376, 28, 104),
+        b("stone", 782, 356, 320, 20),
+        b("glass", 880, 436, 40, 40),
+        b("glass", 964, 436, 40, 40),
+        b("wood", 1210, 424, 22, 96),
+        b("wood", 1332, 424, 22, 96),
+        b("wood", 1196, 404, 172, 20),
+        b("glass", 1262, 364, 40, 40),
       ],
-      orbs: [
-        { x: 566, y: 330, r: 18 },
-        { x: 654, y: 470, r: 18 },
-        { x: 488, y: 470, r: 18 },
-      ],
+      wisps: [wisp(860, 463), wisp(1020, 463), wisp(1130, 504), wisp(1282, 346), wisp(1410, 504)],
     },
   ];
+
+  // ---------------------------------------------------------------------------
+  // DOM
+  // ---------------------------------------------------------------------------
+  const el = (id) => document.getElementById(id);
+  const levelLabel = el("levelLabel");
+  const scoreLabel = el("scoreLabel");
+  const stonesLabel = el("stonesLabel");
+  const powerLabel = el("powerLabel");
+  const restartBtn = el("restartBtn");
+  const nextBtn = el("nextBtn");
+  const muteBtn = el("muteBtn");
+  const lookBtn = el("lookBtn");
+  const messageEl = el("message");
+  const overlay = el("overlay");
+  const overlayTitle = el("overlayTitle");
+  const overlayStars = el("overlayStars");
+  const overlayText = el("overlayText");
+  const overlayPrimary = el("overlayPrimary");
+  const overlaySecondary = el("overlaySecondary");
+  const ammoStrip = el("ammoStrip");
+  const abilityHint = el("abilityHint");
+
+  // ---------------------------------------------------------------------------
+  // Engine
+  // ---------------------------------------------------------------------------
+  const engine = Engine.create({
+    enableSleeping: true,
+    gravity: { x: 0, y: 1, scale: GRAVITY_SCALE },
+    positionIterations: 8,
+    velocityIterations: 8,
+  });
+  const world = engine.world;
+
+  const ground = Bodies.rectangle(WORLD_W / 2, GROUND_Y + 80, WORLD_W + 600, 160, {
+    isStatic: true, label: "ground", friction: 0.9,
+  });
+  const leftWall = Bodies.rectangle(-40, H / 2, 80, H * 3, { isStatic: true, label: "wall" });
+  const rightWall = Bodies.rectangle(WORLD_W + 40, H / 2, 80, H * 3, { isStatic: true, label: "wall" });
+  Composite.add(world, [ground, leftWall, rightWall]);
 
   const state = {
     levelIndex: 0,
     score: 0,
-    shotsLeft: 0,
-    crates: [],
-    orbs: [],
-    stone: null,
+    ammo: [],
+    shotsFired: 0,
+    blocks: [],
+    wisps: [],
+    activeStone: null,
+    spentStones: [],
     particles: [],
+    floaters: [],
+    shockwaves: [],
+    trail: [],
     dragging: false,
-    dragPos: { x: 0, y: 0 },
+    dragPos: { x: ANCHOR.x, y: ANCHOR.y },
+    power: 0,
+    abilityUsed: false,
+    reloadTimer: 0,
+    settleTimer: 0,
+    completeTimer: 0,
     levelComplete: false,
     levelFailed: false,
-    settleTimer: 0,
-    stoneRetireTimer: 0,
-    power: 0,
-    message: "",
+    stars: 0,
+    camera: 0,
+    introTimer: 0,
+    peek: false,
+    shake: 0,
+    muted: false,
+    time: 0,
   };
 
+  // ---------------------------------------------------------------------------
+  // Audio (synthesized only)
+  // ---------------------------------------------------------------------------
   let audioCtx = null;
+  let noiseBuffer = null;
 
   function ensureAudio() {
     if (!audioCtx) {
       const Ctor = window.AudioContext || window.webkitAudioContext;
-      if (Ctor) audioCtx = new Ctor();
+      if (Ctor) {
+        audioCtx = new Ctor();
+        noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.4, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      }
     }
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
   }
 
-  function tone(freq, duration, type = "sine", gain = 0.06) {
-    if (!audioCtx) return;
+  function tone(freq, duration, type = "sine", gain = 0.06, slideTo = null) {
+    if (!audioCtx || state.muted) return;
     const osc = audioCtx.createOscillator();
     const amp = audioCtx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, audioCtx.currentTime + duration);
     amp.gain.setValueAtTime(gain, audioCtx.currentTime);
     amp.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-    osc.connect(amp);
-    amp.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+    osc.connect(amp); amp.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + duration);
   }
 
-  function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
+  function noise(duration, gain, filterFreq) {
+    if (!audioCtx || !noiseBuffer || state.muted) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = filterFreq;
+    const amp = audioCtx.createGain();
+    amp.gain.setValueAtTime(gain, audioCtx.currentTime);
+    amp.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+    src.connect(filter); filter.connect(amp); amp.connect(audioCtx.destination);
+    src.start(); src.stop(audioCtx.currentTime + duration);
   }
 
-  function rand(a, b) {
-    return a + Math.random() * (b - a);
+  const sfx = {
+    launch: () => { tone(300, 0.16, "triangle", 0.05, 120); noise(0.08, 0.02, 900); },
+    thud: () => { tone(110, 0.09, "sine", 0.035, 70); },
+    wood: () => { noise(0.12, 0.05, 1100); tone(190, 0.1, "square", 0.02, 90); },
+    glass: () => { noise(0.18, 0.035, 4200); tone(1400, 0.12, "sine", 0.025, 2600); },
+    rock: () => { noise(0.16, 0.055, 650); tone(95, 0.13, "sawtooth", 0.02, 55); },
+    pop: () => { tone(720, 0.18, "sine", 0.055, 1320); tone(1080, 0.14, "triangle", 0.025, 1600); },
+    blast: () => { noise(0.34, 0.11, 480); tone(70, 0.35, "sawtooth", 0.06, 35); },
+    surge: () => { tone(420, 0.2, "sawtooth", 0.04, 900); },
+    split: () => { tone(520, 0.13, "triangle", 0.035, 980); tone(660, 0.11, "sine", 0.025, 1200); },
+    win: () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.3, "triangle", 0.05), i * 110)); },
+    lose: () => { tone(220, 0.35, "sawtooth", 0.045, 90); },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  function hash(n) {
+    const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return s - Math.floor(s);
   }
 
-  function makeCrate(def) {
-    return {
-      x: def.x, y: def.y, w: def.w, h: def.h,
-      vx: 0, vy: 0,
-      color: `hsl(${rand(24, 38)}, 55%, ${rand(38, 52)}%)`,
-      settled: false,
+  function bestStarsKey(i) { return `slingstone.best.${i}`; }
+  function getBestStars(i) {
+    try { return Number(localStorage.getItem(bestStarsKey(i))) || 0; } catch { return 0; }
+  }
+  function setBestStars(i, stars) {
+    try { if (stars > getBestStars(i)) localStorage.setItem(bestStarsKey(i), String(stars)); } catch { /* storage disabled */ }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Level construction
+  // ---------------------------------------------------------------------------
+  function clearLevel() {
+    const bodies = Composite.allBodies(world);
+    for (const body of bodies) {
+      if (body !== ground && body !== leftWall && body !== rightWall) Composite.remove(world, body);
+    }
+    state.blocks = [];
+    state.wisps = [];
+    state.activeStone = null;
+    state.spentStones = [];
+    state.particles = [];
+    state.floaters = [];
+    state.shockwaves = [];
+    state.trail = [];
+  }
+
+  function addBlock(def) {
+    const mat = MATERIALS[def.type];
+    const body = Bodies.rectangle(def.x + def.w / 2, def.y + def.h / 2, def.w, def.h, {
+      density: mat.density,
+      friction: mat.friction,
+      frictionStatic: mat.friction * 1.2,
+      restitution: mat.restitution,
+      sleepThreshold: 45,
+      label: `block-${def.type}`,
+    });
+    body.game = {
+      kind: "block", material: def.type, w: def.w, h: def.h,
+      hp: mat.hp, maxHp: mat.hp, seed: Math.floor(rand(1, 100000)), dead: false,
     };
+    Composite.add(world, body);
+    state.blocks.push(body);
+    return body;
   }
 
-  function makeOrb(def) {
-    return {
-      x: def.x, y: def.y, r: def.r,
-      hue: rand(150, 280),
-      phase: rand(0, Math.PI * 2),
-      alive: true,
-    };
+  function addWisp(def) {
+    const body = Bodies.circle(def.x, def.y, def.r, {
+      density: 0.0016, friction: 0.5, frictionAir: 0.016,
+      restitution: 0.42, sleepThreshold: 45, label: "wisp",
+    });
+    body.game = { kind: "wisp", r: def.r, hue: rand(155, 285), phase: rand(0, 6.28), alive: true };
+    Composite.add(world, body);
+    state.wisps.push(body);
+    return body;
   }
 
   function loadLevel(index) {
+    clearLevel();
     const def = LEVELS[index];
     state.levelIndex = index;
-    state.shotsLeft = def.shots;
-    state.crates = def.crates.map(makeCrate);
-    state.orbs = def.orbs.map(makeOrb);
-    state.stone = null;
-    state.particles = [];
+    state.ammo = def.ammo.slice();
+    state.shotsFired = 0;
+    for (const block of def.blocks) addBlock(block);
+    for (const w of def.wisps) addWisp(w);
     state.dragging = false;
+    state.power = 0;
+    state.abilityUsed = false;
+    state.reloadTimer = 0;
+    state.settleTimer = 0;
+    state.completeTimer = 0;
     state.levelComplete = false;
     state.levelFailed = false;
-    state.settleTimer = 0;
-    state.stoneRetireTimer = 0;
-    state.power = 0;
-    state.message = "";
+    state.stars = 0;
+    state.camera = 0;
+    state.introTimer = 2.6; // brief flyover so the player can see the whole level
+    state.peek = false;
+    state.shake = 0;
+    state.dragPos = { x: ANCHOR.x, y: ANCHOR.y };
+    lookBtn.classList.remove("active");
+    lookBtn.textContent = "Peek at targets";
     nextBtn.disabled = true;
+    overlay.classList.add("hidden");
     messageEl.classList.add("hidden");
     updateHud();
   }
 
+  function currentStoneType() { return state.ammo[0] || null; }
+
   function updateHud() {
-    levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length}`;
+    const def = LEVELS[state.levelIndex];
+    levelLabel.textContent = `Level ${state.levelIndex + 1} / ${LEVELS.length} · ${def.name}`;
     scoreLabel.textContent = `Score: ${state.score}`;
-    shotsLabel.textContent = `Shots: ${state.shotsLeft}`;
-    if (powerLabel) powerLabel.textContent = `Power: ${Math.round(state.power * 100)}%`;
+    stonesLabel.textContent = `Stones: ${state.ammo.length}`;
+    powerLabel.textContent = `Power: ${Math.round(state.power * 100)}%`;
+
+    ammoStrip.innerHTML = def.ammo.map((type, i) => {
+      const cls = i < state.shotsFired ? "spent" : (i === state.shotsFired ? "current" : "");
+      return `<span class="ammo-chip ${cls}" data-type="${type}" title="${STONE_TYPES[type].name}">${STONE_TYPES[type].glyph}</span>`;
+    }).join("");
+
+    const type = currentStoneType();
+    abilityHint.innerHTML = state.levelComplete
+      ? "Level clear!"
+      : state.activeStone && !state.abilityUsed && STONE_TYPES[state.activeStone.type].ability
+        ? "<strong>Ability ready!</strong> Click, tap, or press Space now."
+        : type ? ABILITY_TEXT[type] : "Out of stones.";
   }
 
   function showMessage(text) {
-    state.message = text;
     messageEl.textContent = text;
     messageEl.classList.remove("hidden");
   }
 
-  function spawnParticles(x, y, count, hue) {
+  function floater(x, y, text, color = "#fcd34d") {
+    state.floaters.push({ x, y, text, color, life: 1.1, maxLife: 1.1 });
+  }
+
+  function burst(x, y, count, opts = {}) {
     for (let i = 0; i < count; i++) {
       state.particles.push({
         x, y,
-        vx: rand(-160, 160),
-        vy: rand(-220, -40),
-        life: rand(0.4, 0.9),
-        maxLife: 0.9,
-        size: rand(2, 5),
-        hue,
+        vx: rand(opts.vxMin ?? -220, opts.vxMax ?? 220),
+        vy: rand(opts.vyMin ?? -280, opts.vyMax ?? -30),
+        life: rand(0.35, opts.life ?? 0.85),
+        maxLife: opts.life ?? 0.85,
+        size: rand(opts.sizeMin ?? 2, opts.sizeMax ?? 6),
+        color: opts.colors ? pick(opts.colors) : "#c8b18a",
+        spin: rand(-10, 10),
+        rot: rand(0, 6.28),
+        kind: opts.kind || "chunk",
       });
     }
   }
 
-  function pointerToCanvas(evt) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = W / rect.width;
-    const scaleY = H / rect.height;
-    const point = evt.touches ? evt.touches[0] : evt;
-    return {
-      x: (point.clientX - rect.left) * scaleX,
-      y: (point.clientY - rect.top) * scaleY,
-    };
+  // ---------------------------------------------------------------------------
+  // Damage, destruction, wisps
+  // ---------------------------------------------------------------------------
+  function damageBlock(body, amount, impactX, impactY) {
+    if (!body.game || body.game.dead) return;
+    body.game.hp -= amount;
+    Sleeping.set(body, false);
+    if (body.game.hp > 0) {
+      if (amount > 12) burst(impactX, impactY, 4, {
+        colors: ["#e8d5b0", "#b89a6a"], sizeMin: 1.5, sizeMax: 3, life: 0.4,
+      });
+      return;
+    }
+    breakBlock(body, impactX, impactY);
   }
 
-  function anchor() {
-    return { x: 150, y: 430 };
+  function breakBlock(body, x, y) {
+    if (!body.game || body.game.dead) return;
+    body.game.dead = true;
+    const { material, w, h } = body.game;
+    const palette = {
+      wood: ["#d9a55f", "#a9713a", "#7c4f28", "#e8c188"],
+      glass: ["#bff3ff", "#7fd8f0", "#e9fbff", "#4aa8c8"],
+      stone: ["#b8c2d0", "#8895a8", "#6b778c", "#d8e0ea"],
+    }[material];
+    burst(x ?? body.position.x, y ?? body.position.y, material === "glass" ? 22 : 14, {
+      colors: palette, sizeMin: 2, sizeMax: Math.min(9, Math.max(w, h) / 5), life: 1.0,
+    });
+    state.score += MATERIALS[material].score;
+    floater(body.position.x, body.position.y - 12, `+${MATERIALS[material].score}`, "#9fe8ff");
+    sfx[material === "stone" ? "rock" : material]();
+    state.shake = Math.max(state.shake, material === "stone" ? 5 : 3);
+    Composite.remove(world, body);
+    const idx = state.blocks.indexOf(body);
+    if (idx >= 0) state.blocks.splice(idx, 1);
+    updateHud();
+  }
+
+  function popWisp(wispBody, reason = "hit") {
+    if (!wispBody.game || !wispBody.game.alive) return;
+    wispBody.game.alive = false;
+    const { x, y } = wispBody.position;
+    burst(x, y, 26, {
+      colors: ["#a5f3fc", "#f0abfc", "#fde68a", "#ffffff"],
+      sizeMin: 2, sizeMax: 5, life: 0.95, kind: "spark", vxMin: -260, vxMax: 260, vyMin: -300, vyMax: 60,
+    });
+    state.shockwaves.push({ x, y, r: 6, maxR: 62, life: 0.5, maxLife: 0.5, color: "#f0abfc" });
+    state.score += 500;
+    floater(x, y - 20, "+500", "#fcd34d");
+    sfx.pop();
+    state.shake = Math.max(state.shake, 4);
+    Composite.remove(world, wispBody);
+    updateHud();
+    checkWin();
+  }
+
+  Events.on(engine, "collisionStart", (event) => {
+    for (const pair of event.pairs) {
+      const a = pair.bodyA, c = pair.bodyB;
+      const va = Body.getVelocity(a), vc = Body.getVelocity(c);
+      const rel = Math.hypot(va.x - vc.x, va.y - vc.y);
+      const contact = {
+        x: (a.position.x + c.position.x) / 2,
+        y: (a.position.y + c.position.y) / 2,
+      };
+
+      // Blocks take damage on impact.
+      considerBlockDamage(a, c, rel, contact);
+      considerBlockDamage(c, a, rel, contact);
+
+      // Wisps pop on a solid hit or a direct strike from the player's stone.
+      considerWispPop(a, c, rel);
+      considerWispPop(c, a, rel);
+    }
+  });
+
+  function considerBlockDamage(block, other, rel, contact) {
+    if (!block.game || block.game.kind !== "block" || block.game.dead) return;
+    if (rel < 2.4) return;
+    const otherMass = other.isStatic ? block.mass * 2 : other.mass;
+    const eff = Math.min(block.mass, otherMass);
+    let factor = 0.075;
+    if (other.game && other.game.kind === "stone") factor = 0.21;
+    else if (other.isStatic) factor = 0.10;
+    const dmg = rel * rel * eff * factor;
+    damageBlock(block, dmg, contact.x, contact.y);
+    if (rel > 6) sfx.thud();
+  }
+
+  function considerWispPop(wispBody, other, rel) {
+    if (!wispBody.game || wispBody.game.kind !== "wisp" || !wispBody.game.alive) return;
+    const directStone = other.game && other.game.kind === "stone" && rel > 1.6;
+    if (directStone || rel > 5.2) popWisp(wispBody, directStone ? "hit" : "crushed");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shooting and abilities
+  // ---------------------------------------------------------------------------
+  function pointerToWorld(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const point = evt.touches ? evt.touches[0] : evt;
+    return {
+      x: (point.clientX - rect.left) * (W / rect.width) + state.camera,
+      y: (point.clientY - rect.top) * (H / rect.height),
+    };
   }
 
   function beginDrag(evt) {
     if (state.levelComplete || state.levelFailed) return;
-    if (state.shotsLeft <= 0 || state.stone) return;
-    const p = pointerToCanvas(evt);
-    const a = anchor();
-    const dist = Math.hypot(p.x - a.x, p.y - a.y);
-    if (dist <= GRAB_RADIUS) {
-      ensureAudio();
-      state.dragging = true;
-      state.power = 0;
-      state.dragPos = { x: a.x, y: a.y };
-      updateHud();
-      evt.preventDefault();
+    if (state.activeStone) {
+      if (!state.abilityUsed) activateAbility();
+      return;
     }
+    // Touching the canvas cancels the flyover/peek and snaps home so the first
+    // click always lands on the slingshot rather than on a panned-away view.
+    if (state.introTimer > 0 || state.peek || state.camera > 1) {
+      state.introTimer = 0;
+      state.peek = false;
+      state.camera = 0;
+      lookBtn.classList.remove("active");
+      lookBtn.textContent = "Peek at targets";
+    }
+    if (state.reloadTimer > 0 || state.ammo.length === 0) return;
+    const p = pointerToWorld(evt);
+    if (Math.hypot(p.x - ANCHOR.x, p.y - ANCHOR.y) > GRAB_RADIUS) return;
+    ensureAudio();
+    state.dragging = true;
+    state.dragPos = { x: ANCHOR.x, y: ANCHOR.y };
+    state.power = 0;
+    updateHud();
+    evt.preventDefault();
   }
 
   function moveDrag(evt) {
     if (!state.dragging) return;
-    const p = pointerToCanvas(evt);
-    const a = anchor();
-    let dx = p.x - a.x;
-    let dy = p.y - a.y;
+    const p = pointerToWorld(evt);
+    let dx = p.x - ANCHOR.x, dy = p.y - ANCHOR.y;
     const dist = Math.hypot(dx, dy);
-    if (dist > MAX_DRAG) {
-      dx = (dx / dist) * MAX_DRAG;
-      dy = (dy / dist) * MAX_DRAG;
-    }
-    // Keep the pouch on screen so a full pull never disappears below the ground.
-    let x = clamp(a.x + dx, 12, W - 12);
-    let y = clamp(a.y + dy, 12, GROUND_Y - 18);
-    state.dragPos = { x, y };
-    state.power = clamp(Math.hypot(a.x - x, a.y - y) / MAX_DRAG, 0, 1);
+    if (dist > MAX_DRAG) { dx = dx / dist * MAX_DRAG; dy = dy / dist * MAX_DRAG; }
+    state.dragPos = {
+      x: clamp(ANCHOR.x + dx, 14, WORLD_W - 14),
+      y: clamp(ANCHOR.y + dy, 14, GROUND_Y - 22),
+    };
+    state.power = clamp(Math.hypot(ANCHOR.x - state.dragPos.x, ANCHOR.y - state.dragPos.y) / MAX_DRAG, 0, 1);
     updateHud();
     evt.preventDefault();
   }
@@ -248,473 +540,846 @@
   function endDrag(evt) {
     if (!state.dragging) return;
     state.dragging = false;
-    const a = anchor();
-    const dx = a.x - state.dragPos.x;
-    const dy = a.y - state.dragPos.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 8) {
+    const dx = ANCHOR.x - state.dragPos.x;
+    const dy = ANCHOR.y - state.dragPos.y;
+    if (Math.hypot(dx, dy) < 10) {
       state.power = 0;
+      state.dragPos = { x: ANCHOR.x, y: ANCHOR.y };
       updateHud();
       evt.preventDefault();
       return;
     }
-    state.stone = {
-      x: state.dragPos.x,
-      y: state.dragPos.y,
-      vx: dx * LAUNCH_POWER,
-      vy: dy * LAUNCH_POWER,
-      r: STONE_RADIUS,
-      active: true,
-      age: 0,
-      restTime: 0,
-    };
-    state.shotsLeft -= 1;
-    state.settleTimer = 0;
-    state.stoneRetireTimer = 0;
-    state.power = 0;
-    updateHud();
-    tone(220, 0.12, "triangle", 0.05);
+    launch(dx, dy);
     evt.preventDefault();
   }
 
-  function circleRectCollide(cx, cy, r, rect) {
-    const closestX = clamp(cx, rect.x, rect.x + rect.w);
-    const closestY = clamp(cy, rect.y, rect.y + rect.h);
-    const dx = cx - closestX;
-    const dy = cy - closestY;
-    return { hit: dx * dx + dy * dy <= r * r, dx, dy, dist: Math.hypot(dx, dy) };
+  function launch(dx, dy) {
+    const type = state.ammo.shift();
+    if (!type) return;
+    const spec = STONE_TYPES[type];
+    const body = Bodies.circle(state.dragPos.x, state.dragPos.y, spec.r, {
+      density: spec.density,
+      frictionAir: 0.0016,
+      friction: 0.55,
+      restitution: 0.42,
+      sleepThreshold: 60,
+      label: "stone",
+    });
+    body.game = { kind: "stone", type, r: spec.r };
+    Composite.add(world, body);
+    const k = LAUNCH_SPEED / MAX_DRAG;
+    Body.setVelocity(body, { x: dx * k, y: dy * k });
+    Body.setAngularVelocity(body, rand(-0.16, 0.16));
+    state.activeStone = { body, type, age: 0, restTime: 0, abilityUsed: false };
+    state.shotsFired += 1;
+    state.abilityUsed = false;
+    state.trail = [];
+    state.power = 0;
+    state.settleTimer = 0;
+    burst(state.dragPos.x, state.dragPos.y, 9, {
+      colors: ["#e8d5b0", "#b89a6a"], sizeMin: 1.5, sizeMax: 3.5, life: 0.45,
+    });
+    sfx.launch();
+    updateHud();
   }
 
-  function updateStone(dt) {
-    const s = state.stone;
-    if (!s || !s.active) return;
-    s.age += dt;
-    s.hitCooldown = Math.max(0, (s.hitCooldown || 0) - dt);
-    s.vy += GRAVITY * dt;
-    s.x += s.vx * dt;
-    s.y += s.vy * dt;
+  function activateAbility() {
+    const s = state.activeStone;
+    if (!s || state.abilityUsed || s.age < 0.08) return;
+    const spec = STONE_TYPES[s.type];
+    if (!spec.ability) return;
+    state.abilityUsed = true;
+    s.abilityUsed = true;
+    const body = s.body;
+    const pos = { x: body.position.x, y: body.position.y };
+    const vel = Body.getVelocity(body);
 
-    // Ground
-    let onGround = false;
-    if (s.y + s.r > GROUND_Y) {
-      s.y = GROUND_Y - s.r;
-      if (s.vy > 60) tone(120, 0.08, "sine", 0.03);
-      s.vy *= -0.35;
-      s.vx *= 0.7;
-      onGround = true;
+    if (spec.ability === "surge") {
+      const speed = Math.hypot(vel.x, vel.y) || 1;
+      const boost = 1.75;
+      Body.setVelocity(body, { x: vel.x * boost, y: vel.y * boost - 1.2 });
+      burst(pos.x, pos.y, 22, {
+        colors: ["#5eead4", "#a7f3d0", "#ffffff"], kind: "spark",
+        vxMin: -200, vxMax: 60, vyMin: -90, vyMax: 90, life: 0.6,
+      });
+      state.shockwaves.push({ x: pos.x, y: pos.y, r: 8, maxR: 70, life: 0.4, maxLife: 0.4, color: "#5eead4" });
+      sfx.surge();
+    } else if (spec.ability === "blast") {
+      detonate(pos.x, pos.y);
+      retireStone(true);
+    } else if (spec.ability === "scatter") {
+      scatter(pos, vel);
     }
+    updateHud();
+  }
 
-    // A stone that has come to rest is retired instead of lingering invisibly.
-    if (onGround && Math.abs(s.vy) < 45 && Math.abs(s.vx) < 45) {
+  function detonate(x, y) {
+    const R = 138;
+    state.shockwaves.push({ x, y, r: 10, maxR: R * 1.15, life: 0.55, maxLife: 0.55, color: "#fbbf24" });
+    burst(x, y, 40, {
+      colors: ["#fbbf24", "#fb923c", "#fde68a", "#7f1d1d"], kind: "spark",
+      vxMin: -380, vxMax: 380, vyMin: -380, vyMax: 220, life: 0.8, sizeMin: 2, sizeMax: 7,
+    });
+    state.shake = 15;
+    sfx.blast();
+
+    const bodies = Composite.allBodies(world).filter(bd => !bd.isStatic);
+    for (const bd of bodies) {
+      const dx = bd.position.x - x, dy = bd.position.y - y;
+      const d = Math.hypot(dx, dy);
+      if (d > R) continue;
+      const falloff = 1 - d / R;
+      const nx = d > 0.01 ? dx / d : 0;
+      const ny = d > 0.01 ? dy / d : -1;
+      Sleeping.set(bd, false);
+      Body.applyForce(bd, bd.position, {
+        x: nx * bd.mass * 0.055 * falloff,
+        y: (ny - 0.45) * bd.mass * 0.055 * falloff,
+      });
+      if (bd.game && bd.game.kind === "block") damageBlock(bd, 175 * falloff, bd.position.x, bd.position.y);
+      if (bd.game && bd.game.kind === "wisp" && bd.game.alive) popWisp(bd, "blast");
+    }
+  }
+
+  function scatter(pos, vel) {
+    const s = state.activeStone;
+    const baseSpeed = Math.max(8, Math.hypot(vel.x, vel.y));
+    const baseAngle = Math.atan2(vel.y, vel.x);
+    Composite.remove(world, s.body);
+    for (let i = -1; i <= 1; i++) {
+      const angle = baseAngle + i * 0.32;
+      const r = 9;
+      const bd = Bodies.circle(pos.x + i * 6, pos.y - Math.abs(i) * 4, r, {
+        density: 0.0055, frictionAir: 0.0018, restitution: 0.42, label: "stone",
+      });
+      bd.game = { kind: "stone", type: "splitter", r };
+      Composite.add(world, bd);
+      Body.setVelocity(bd, { x: Math.cos(angle) * baseSpeed, y: Math.sin(angle) * baseSpeed });
+      state.spentStones.push({ body: bd, type: "splitter", age: 0.9, restTime: 0 });
+    }
+    state.activeStone = null;
+    state.reloadTimer = RELOAD_DELAY;
+    burst(pos.x, pos.y, 20, {
+      colors: ["#c4b5fd", "#e9d5ff", "#ffffff"], kind: "spark", life: 0.55,
+    });
+    sfx.split();
+  }
+
+  function retireStone(immediate = false) {
+    const s = state.activeStone;
+    if (!s) return;
+    if (immediate) {
+      Composite.remove(world, s.body);
+    } else {
+      state.spentStones.push({ body: s.body, type: s.type, age: STONE_MAX_AGE - 0.6, restTime: 0 });
+    }
+    state.activeStone = null;
+    state.abilityUsed = false;
+    state.reloadTimer = RELOAD_DELAY;
+    updateHud();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Simulation step
+  // ---------------------------------------------------------------------------
+  function updateStone(dt) {
+    const s = state.activeStone;
+    if (!s) return;
+    s.age += dt;
+    const pos = s.body.position;
+    const vel = Body.getVelocity(s.body);
+    const speed = Math.hypot(vel.x, vel.y);
+
+    state.trail.push({ x: pos.x, y: pos.y, life: 0.42 });
+    if (state.trail.length > 26) state.trail.shift();
+
+    if (pos.y > H + 90 || pos.x < -80 || pos.x > WORLD_W + 80 || s.age > STONE_MAX_AGE) {
+      retireStone(true);
+      return;
+    }
+    if (s.age > 0.55 && speed < 1.3) {
       s.restTime += dt;
+      if (s.restTime > 0.4) retireStone();
     } else {
       s.restTime = 0;
     }
-    if (s.restTime > 0.3 || s.age > STONE_MAX_AGE) {
-      s.active = false;
-    }
-
-    // Orbs
-    for (const orb of state.orbs) {
-      if (!orb.alive) continue;
-      const dx = s.x - orb.x;
-      const dy = s.y - orb.y;
-      if (Math.hypot(dx, dy) < s.r + orb.r) {
-        orb.alive = false;
-        state.score += 100;
-        spawnParticles(orb.x, orb.y, 18, orb.hue);
-        tone(660, 0.16, "square", 0.05);
-        updateHud();
-      }
-    }
-
-    // Crates
-    for (const c of state.crates) {
-      const col = circleRectCollide(s.x, s.y, s.r, c);
-      if (!col.hit) continue;
-      let nx = col.dx;
-      let ny = col.dy;
-      if (col.dist < 0.001) {
-        nx = s.x - (c.x + c.w / 2);
-        ny = s.y - (c.y + c.h / 2);
-        const n = Math.hypot(nx, ny) || 1;
-        nx /= n; ny /= n;
-      } else {
-        nx /= col.dist; ny /= col.dist;
-      }
-      // push stone out
-      s.x += nx * (s.r - col.dist + 0.5);
-      s.y += ny * (s.r - col.dist + 0.5);
-      // reflect velocity
-      const dot = s.vx * nx + s.vy * ny;
-      s.vx = (s.vx - 2 * dot * nx) * 0.55;
-      s.vy = (s.vy - 2 * dot * ny) * 0.55;
-      // impulse to crate (capped so a fast stone does not launch crates off-screen)
-      c.vx += clamp(s.vx * 0.3, -420, 420);
-      c.vy += clamp(s.vy * 0.3, -420, 420) - 60;
-      c.settled = false;
-      if (s.hitCooldown === 0) {
-        spawnParticles(s.x, s.y, 8, 35);
-        tone(180, 0.07, "sawtooth", 0.025);
-        s.hitCooldown = 0.09;
-      }
-    }
-
-    // Off screen / expired
-    if (s.x > W + 100 || s.x < -100 || s.y > H + 100 || s.age > STONE_MAX_AGE) {
-      s.active = false;
-    }
   }
 
-  function updateCrates(dt) {
-    for (const c of state.crates) {
-      if (c.settled) continue;
-      c.vy += GRAVITY * dt;
-      c.x += c.vx * dt;
-      c.y += c.vy * dt;
-
-      if (c.y + c.h > GROUND_Y) {
-        c.y = GROUND_Y - c.h;
-        c.vy = 0;
-        c.vx *= 0.82;
-      }
-
-      // Keep knocked crates inside the playfield.
-      if (c.x < 8) { c.x = 8; c.vx = Math.abs(c.vx) * 0.35; }
-      if (c.x + c.w > W - 8) { c.x = W - 8 - c.w; c.vx = -Math.abs(c.vx) * 0.35; }
-
-    }
-
-    // Crate-crate separation. No extra "fudge" push: the previous +0.5 px
-    // applied every frame slowly levitated stacked crates into the orbs.
-    for (let i = 0; i < state.crates.length; i++) {
-      for (let j = i + 1; j < state.crates.length; j++) {
-        const a = state.crates[i];
-        const b = state.crates[j];
-        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-        const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-        if (ox <= 0.5 || oy <= 0.5) continue;
-        if (ox < oy) {
-          const push = ox / 2;
-          if (a.x < b.x) { a.x -= push; b.x += push; }
-          else { a.x += push; b.x -= push; }
-          const tmp = a.vx; a.vx = b.vx * 0.5; b.vx = tmp * 0.5;
-          a.settled = false; b.settled = false;
-        } else {
-          const push = oy / 2;
-          if (a.y < b.y) { a.y -= push; b.y += push; }
-          else { a.y += push; b.y -= push; }
-          const tmp = a.vy; a.vy = b.vy * 0.5; b.vy = tmp * 0.5;
-          a.settled = false; b.settled = false;
-        }
-      }
-    }
-
-    // Snap resting crates onto their support (ground or another crate) and wake
-    // any crate whose support was knocked away.
-    for (const c of state.crates) {
-      let support = GROUND_Y;
-      for (const o of state.crates) {
-        if (o === c) continue;
-        const ox = Math.min(c.x + c.w, o.x + o.w) - Math.max(c.x, o.x);
-        const gap = o.y - (c.y + c.h);
-        if (ox > 4 && gap > -12 && gap < 12 && o.y < support) support = o.y;
-      }
-      const gap = support - (c.y + c.h);
-      if (gap > -2 && gap < 6) {
-        if (c.vy > 0) {
-          c.y = support - c.h;
-          c.vy = 0;
-        }
-        if (Math.abs(c.vx) < 4) {
-          c.vx = 0;
-          c.settled = true;
-        }
-      } else if (gap >= 6) {
-        c.settled = false;
-      }
-    }
-
-    // Any crate touching an orb pops it, whether settled or flying.
-    for (const c of state.crates) {
-      for (const orb of state.orbs) {
-        if (!orb.alive) continue;
-        if (!circleRectCollide(orb.x, orb.y, orb.r, c).hit) continue;
-        orb.alive = false;
-        state.score += 100;
-        spawnParticles(orb.x, orb.y, 18, orb.hue);
-        tone(660, 0.16, "square", 0.05);
-        updateHud();
+  function updateSpent(dt) {
+    for (let i = state.spentStones.length - 1; i >= 0; i--) {
+      const s = state.spentStones[i];
+      s.age += dt;
+      if (s.age > STONE_MAX_AGE + 0.5 || s.body.position.y > H + 90) {
+        Composite.remove(world, s.body);
+        state.spentStones.splice(i, 1);
       }
     }
   }
 
-  function updateParticles(dt) {
+  function updateEffects(dt) {
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i];
       p.life -= dt;
-      p.vy += GRAVITY * 0.6 * dt;
+      p.vy += (p.kind === "spark" ? 420 : 900) * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      p.rot += p.spin * dt;
       if (p.life <= 0) state.particles.splice(i, 1);
     }
+    for (let i = state.floaters.length - 1; i >= 0; i--) {
+      const f = state.floaters[i];
+      f.life -= dt;
+      f.y -= 34 * dt;
+      if (f.life <= 0) state.floaters.splice(i, 1);
+    }
+    for (let i = state.shockwaves.length - 1; i >= 0; i--) {
+      const s = state.shockwaves[i];
+      s.life -= dt;
+      s.r += (s.maxR - s.r) * Math.min(1, dt * 9);
+      if (s.life <= 0) state.shockwaves.splice(i, 1);
+    }
+    for (let i = state.trail.length - 1; i >= 0; i--) {
+      state.trail[i].life -= dt;
+      if (state.trail[i].life <= 0) state.trail.splice(i, 1);
+    }
+    state.shake *= Math.pow(0.02, dt);
+    if (state.shake < 0.15) state.shake = 0;
   }
 
-  function cratesAtRest() {
-    return state.crates.every(c => Math.abs(c.vx) < 12 && Math.abs(c.vy) < 12);
+  function updateWispBounds() {
+    for (const w of state.wisps) {
+      if (!w.game.alive) continue;
+      const p = w.position;
+      if (p.y > H + 70 || p.x < -60 || p.x > WORLD_W + 60) popWisp(w, "fell");
+    }
   }
 
-  function checkWinLoss(dt) {
+  function maxBodySpeed() {
+    let max = 0;
+    for (const bd of Composite.allBodies(world)) {
+      if (bd.isStatic) continue;
+      const v = Body.getVelocity(bd);
+      max = Math.max(max, Math.hypot(v.x, v.y));
+    }
+    return max;
+  }
+
+  function checkWin() {
     if (state.levelComplete || state.levelFailed) return;
-    const remaining = state.orbs.filter(o => o.alive).length;
-    if (remaining === 0) {
-      state.levelComplete = true;
-      nextBtn.disabled = state.levelIndex >= LEVELS.length - 1;
-      showMessage(`Level ${state.levelIndex + 1} complete! Score: ${state.score}`);
-      tone(880, 0.25, "triangle", 0.06);
+    if (state.wisps.some(w => w.game.alive)) return;
+    state.levelComplete = true;
+    state.completeTimer = 0.55;
+    const leftover = state.ammo.length;
+    const total = LEVELS[state.levelIndex].ammo.length;
+    state.stars = 1 + (leftover >= 1 ? 1 : 0) + (leftover >= Math.ceil(total / 2) ? 1 : 0);
+    state.score += leftover * 250;
+    if (leftover > 0) floater(ANCHOR.x + 60, ANCHOR.y - 70, `+${leftover * 250} bonus`, "#6ee7b7");
+    setBestStars(state.levelIndex, state.stars);
+    nextBtn.disabled = state.levelIndex >= LEVELS.length - 1;
+    updateHud();
+    sfx.win();
+  }
+
+  function checkLoss(dt) {
+    if (state.levelComplete || state.levelFailed) return;
+    if (state.ammo.length > 0 || state.activeStone || state.reloadTimer > 0) {
+      state.settleTimer = 0;
       return;
     }
-
-    // Retire a spent stone so the slingshot can load the next one. Without this
-    // the old stone object stayed in state forever and blocked every later shot.
-    if (state.stone && !state.stone.active) {
-      state.stoneRetireTimer += dt;
-      if (state.stoneRetireTimer >= STONE_RETIRE_DELAY) {
-        state.stone = null;
-        state.stoneRetireTimer = 0;
-        state.settleTimer = 0;
-      }
+    if (maxBodySpeed() > 0.85) { state.settleTimer = 0; return; }
+    state.settleTimer += dt;
+    if (state.settleTimer > 1.1) {
+      state.levelFailed = true;
+      sfx.lose();
+      showOverlay(false);
     }
+  }
 
-    if (!state.stone) {
-      state.settleTimer += dt;
-      if (state.shotsLeft <= 0 && state.settleTimer > 1.2 && cratesAtRest()) {
-        state.levelFailed = true;
-        showMessage("Out of stones! Press Restart to try again.");
-        tone(140, 0.3, "sawtooth", 0.05);
-      }
+  function showOverlay(won) {
+    const last = state.levelIndex >= LEVELS.length - 1;
+    overlayTitle.textContent = won ? (last ? "All levels cleared!" : "Level clear!") : "Out of stones";
+    overlayStars.innerHTML = won
+      ? [1, 2, 3].map(i => `<span class="star ${i <= state.stars ? "earned" : ""}">★</span>`).join("")
+      : "";
+    if (won) {
+      const best = getBestStars(state.levelIndex);
+      overlayText.innerHTML = `You scored <strong>${state.score}</strong> points.<br>` +
+        `Best for this level: <strong>${"★".repeat(best)}${"☆".repeat(3 - best)}</strong>` +
+        (last ? "<br>Thanks for playing Slingstone!" : "");
+      overlayPrimary.textContent = last ? "Play again" : "Next Level";
+      overlaySecondary.classList.remove("hidden");
     } else {
-      state.settleTimer = 0;
+      overlayText.innerHTML = `Score so far: <strong>${state.score}</strong>.<br>Try a different angle or use your ability mid-flight.`;
+      overlayPrimary.textContent = "Try Again";
+      overlaySecondary.classList.add("hidden");
     }
+    overlay.classList.remove("hidden");
   }
 
   function update(dt) {
+    state.time += dt;
+    if (state.reloadTimer > 0) state.reloadTimer = Math.max(0, state.reloadTimer - dt);
+    if (state.introTimer > 0) state.introTimer = Math.max(0, state.introTimer - dt);
+    if (state.levelComplete && state.completeTimer > 0) {
+      state.completeTimer -= dt;
+      if (state.completeTimer <= 0) showOverlay(true);
+    }
     updateStone(dt);
-    updateCrates(dt);
-    updateParticles(dt);
-    checkWinLoss(dt);
+    updateSpent(dt);
+    updateEffects(dt);
+    updateWispBounds();
+    checkLoss(dt);
+
+    let target;
+    if (state.activeStone) {
+      target = clamp(state.activeStone.body.position.x - 400, 0, CAM_MAX);
+    } else if (state.levelComplete) {
+      target = state.camera;
+    } else if (state.peek) {
+      target = CAM_MAX;
+    } else if (state.introTimer > 0) {
+      // Flyover: sweep out to the targets, then come back to the slingshot.
+      target = state.introTimer > 1.55 ? CAM_MAX : 0;
+    } else {
+      target = 0;
+    }
+    state.camera += (target - state.camera) * Math.min(1, dt * (state.activeStone ? 5.5 : 3.4));
+    state.camera = clamp(state.camera, 0, CAM_MAX);
   }
 
+  // ---------------------------------------------------------------------------
+  // Rendering - procedural art
+  // ---------------------------------------------------------------------------
   function roundRect(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
     ctx.closePath();
   }
 
-  function drawBackground(t) {
-    const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-    grad.addColorStop(0, "#8ec5ff");
-    grad.addColorStop(1, "#dff1ff");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, GROUND_Y);
+  function hillHeight(wx, base, amp, freq, phase) {
+    return base - amp * (0.5 + 0.5 * Math.sin(wx * freq + phase))
+      - amp * 0.32 * (0.5 + 0.5 * Math.sin(wx * freq * 2.37 + phase * 1.8));
+  }
 
-    // sun
-    ctx.fillStyle = "rgba(255, 236, 170, 0.95)";
-    ctx.beginPath();
-    ctx.arc(820, 90, 46, 0, Math.PI * 2);
-    ctx.fill();
+  function drawSky() {
+    const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    g.addColorStop(0, "#101b3b");
+    g.addColorStop(0.38, "#33497c");
+    g.addColorStop(0.72, "#8c6b8e");
+    g.addColorStop(1, "#f0a868");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
 
-    // clouds
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    for (let i = 0; i < 4; i++) {
-      const cx = ((t * 8 + i * 260) % (W + 200)) - 100;
-      const cy = 70 + (i % 2) * 55;
+    // Sun and halo
+    const sx = 742 - state.camera * 0.045;
+    const sy = 372;
+    const halo = ctx.createRadialGradient(sx, sy, 8, sx, sy, 190);
+    halo.addColorStop(0, "rgba(255, 226, 160, 0.55)");
+    halo.addColorStop(0.45, "rgba(255, 180, 110, 0.18)");
+    halo.addColorStop(1, "rgba(255, 180, 110, 0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(sx, sy, 190, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffe6ad";
+    ctx.beginPath(); ctx.arc(sx, sy, 52, 0, Math.PI * 2); ctx.fill();
+
+    // Stars in the upper sky
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    for (let i = 0; i < 42; i++) {
+      const x = (hash(i + 3) * (W + 200) - state.camera * 0.03) % (W + 200);
+      const y = hash(i + 91) * 230;
+      const tw = 0.45 + 0.55 * Math.abs(Math.sin(state.time * 1.6 + i));
+      ctx.globalAlpha = tw * 0.7;
+      ctx.fillRect(x < 0 ? x + W + 200 : x, y, 1.8, 1.8);
+    }
+    ctx.globalAlpha = 1;
+
+    // Clouds
+    for (let i = 0; i < 7; i++) {
+      const span = W + 420;
+      let cx = (hash(i + 21) * span + state.time * (5 + i * 0.7) - state.camera * 0.12) % span;
+      if (cx < 0) cx += span;
+      cx -= 180;
+      const cy = 60 + hash(i + 55) * 175;
+      const s = 0.7 + hash(i + 77) * 0.8;
+      ctx.fillStyle = `rgba(255, 226, 210, ${0.07 + hash(i + 12) * 0.09})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, 28, 0, Math.PI * 2);
-      ctx.arc(cx + 30, cy - 10, 34, 0, Math.PI * 2);
-      ctx.arc(cx + 65, cy, 26, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, 78 * s, 16 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 34 * s, cy - 9 * s, 52 * s, 14 * s, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 40 * s, cy + 4 * s, 46 * s, 11 * s, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
 
-    // hills
-    ctx.fillStyle = "#79b86b";
+  function drawHills(parallax, base, amp, freq, phase, color) {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(0, GROUND_Y);
-    ctx.quadraticCurveTo(180, 430, 360, GROUND_Y);
-    ctx.quadraticCurveTo(560, 470, 760, GROUND_Y);
-    ctx.quadraticCurveTo(880, 460, W, GROUND_Y);
-    ctx.lineTo(W, H);
-    ctx.lineTo(0, H);
+    ctx.moveTo(-20, H);
+    for (let sx = -20; sx <= W + 20; sx += 10) {
+      const wx = sx + state.camera * parallax;
+      ctx.lineTo(sx, hillHeight(wx, base, amp, freq, phase));
+    }
+    ctx.lineTo(W + 20, H);
     ctx.closePath();
     ctx.fill();
+  }
 
-    // ground
-    ctx.fillStyle = "#5b8c4a";
-    ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  function drawGround() {
+    // Dirt base
+    const g = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+    g.addColorStop(0, "#5b4636");
+    g.addColorStop(1, "#2f241d");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, GROUND_Y, WORLD_W, H - GROUND_Y + 20);
+
+    // Grass lip
+    const gg = ctx.createLinearGradient(0, GROUND_Y - 12, 0, GROUND_Y + 14);
+    gg.addColorStop(0, "#79b45c");
+    gg.addColorStop(1, "#3d6b38");
+    ctx.fillStyle = gg;
+    ctx.fillRect(0, GROUND_Y - 9, WORLD_W, 20);
     ctx.fillStyle = "rgba(255,255,255,0.12)";
-    for (let x = 0; x < W; x += 40) {
-      ctx.fillRect(x, GROUND_Y + 10, 20, 3);
-    }
-  }
+    ctx.fillRect(0, GROUND_Y - 9, WORLD_W, 2);
 
-  function drawSlingshot() {
-    const a = anchor();
-    // base
-    ctx.strokeStyle = "#6b4423";
-    ctx.lineWidth = 12;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(a.x, GROUND_Y);
-    ctx.lineTo(a.x - 8, a.y + 10);
-    ctx.lineTo(a.x - 28, a.y - 44);
-    ctx.moveTo(a.x, GROUND_Y);
-    ctx.lineTo(a.x + 8, a.y + 10);
-    ctx.lineTo(a.x + 28, a.y - 44);
-    ctx.stroke();
-
-    // pouch / band
-    const p = state.dragging ? state.dragPos : a;
-    ctx.strokeStyle = state.dragging && state.power > 0.8 ? "#7a3a1c" : "#3f2a18";
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(a.x - 28, a.y - 44);
-    ctx.lineTo(p.x, p.y);
-    ctx.lineTo(a.x + 28, a.y - 44);
-    ctx.stroke();
-
-    // Power gauge while aiming.
-    if (state.dragging) {
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
-      ctx.fillRect(a.x - 42, GROUND_Y - 24, 84, 9);
-      ctx.fillStyle = state.power > 0.8 ? "#fcd34d" : "#6ee7b7";
-      ctx.fillRect(a.x - 40, GROUND_Y - 22, 80 * state.power, 5);
-    }
-
-    if (!state.stone && !state.levelFailed && !state.levelComplete && state.shotsLeft > 0) {
-      ctx.fillStyle = "#4b5563";
+    // Deterministic pebbles and grass tufts
+    for (let i = 0; i < 130; i++) {
+      const x = hash(i + 301) * WORLD_W;
+      const y = GROUND_Y + 16 + hash(i + 611) * 62;
+      ctx.fillStyle = `rgba(0,0,0,${0.1 + hash(i + 801) * 0.16})`;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, STONE_RADIUS, 0, Math.PI * 2);
+      ctx.ellipse(x, y, 2 + hash(i + 991) * 5, 1.5 + hash(i + 1201) * 2.5, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "#1f2937";
-      ctx.lineWidth = 2;
+    }
+    ctx.strokeStyle = "#8bc96a";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 90; i++) {
+      const x = hash(i + 1501) * WORLD_W;
+      ctx.globalAlpha = 0.5 + hash(i + 1701) * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(x, GROUND_Y - 8);
+      ctx.lineTo(x - 3, GROUND_Y - 17 - hash(i + 1901) * 7);
+      ctx.moveTo(x, GROUND_Y - 8);
+      ctx.lineTo(x + 3, GROUND_Y - 15 - hash(i + 2101) * 6);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawSlingshotBack() {
+    ctx.strokeStyle = "#3c2415";
+    ctx.lineWidth = 15;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(ANCHOR.x, GROUND_Y + 4);
+    ctx.lineTo(ANCHOR.x - 5, ANCHOR.y + 16);
+    ctx.lineTo(FORK.left, FORK.y);
+    ctx.moveTo(ANCHOR.x, GROUND_Y + 4);
+    ctx.lineTo(ANCHOR.x + 5, ANCHOR.y + 16);
+    ctx.lineTo(FORK.right, FORK.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#7c5230";
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(ANCHOR.x, GROUND_Y + 2);
+    ctx.lineTo(ANCHOR.x - 5, ANCHOR.y + 16);
+    ctx.lineTo(FORK.left, FORK.y);
+    ctx.moveTo(ANCHOR.x, GROUND_Y + 2);
+    ctx.lineTo(ANCHOR.x + 5, ANCHOR.y + 16);
+    ctx.lineTo(FORK.right, FORK.y);
+    ctx.stroke();
+
+    // Grain
+    ctx.strokeStyle = "rgba(50,26,12,0.45)";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const off = i * 2.2;
+      ctx.beginPath();
+      ctx.moveTo(ANCHOR.x - 3 + off, GROUND_Y - 6);
+      ctx.quadraticCurveTo(ANCHOR.x - 6 + off, ANCHOR.y + 30, FORK.left + 4 + off, FORK.y + 18);
+      ctx.stroke();
+    }
+  }
+
+  function drawBand() {
+    const p = state.dragging ? state.dragPos : ANCHOR;
+    const pull = state.dragging ? state.power : 0;
+    ctx.strokeStyle = pull > 0.8 ? "#8c3a22" : "#4a2c1b";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(FORK.left, FORK.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.lineTo(FORK.right, FORK.y);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,190,140,0.25)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(FORK.left, FORK.y - 2);
+    ctx.lineTo(p.x, p.y - 2);
+    ctx.stroke();
+
+    // Leather pouch
+    ctx.fillStyle = "#5b3a22";
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, 13, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#2b190e";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function drawStoneShape(x, y, r, type, angle = 0, alpha = 1) {
+    const spec = STONE_TYPES[type] || STONE_TYPES.pebble;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    if (type === "bomber") {
+      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, r * 2.2);
+      glow.addColorStop(0, "rgba(251,146,60,0.55)");
+      glow.addColorStop(1, "rgba(251,146,60,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.15, 0, 0, r);
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.28, spec.color);
+    g.addColorStop(1, "#1c2438");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(8,14,28,0.85)";
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // Speckles
+    ctx.fillStyle = "rgba(10,18,34,0.28)";
+    for (let i = 0; i < 5; i++) {
+      const a = hash(i * 7.3) * 6.28;
+      const d = hash(i * 3.7) * r * 0.62;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * d, Math.sin(a) * d, 1 + hash(i * 5.1) * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = `bold ${Math.round(r * 1.15)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(spec.glyph, 0, 0.5);
+    ctx.restore();
   }
 
   function drawTrajectory() {
     if (!state.dragging) return;
-    const a = anchor();
-    const p = state.dragPos;
-    let vx = (a.x - p.x) * LAUNCH_POWER;
-    let vy = (a.y - p.y) * LAUNCH_POWER;
-    let x = p.x;
-    let y = p.y;
-    const step = 0.035;
-    for (let i = 0; i < 34; i++) {
-      x += vx * step;
-      y += vy * step;
-      vy += GRAVITY * step;
-      if (y > GROUND_Y || x > W + 20) break;
-      ctx.fillStyle = `rgba(255,255,255,${Math.max(0.12, 0.65 - i * 0.016)})`;
+    const k = LAUNCH_SPEED / MAX_DRAG;
+    let vx = (ANCHOR.x - state.dragPos.x) * k;
+    let vy = (ANCHOR.y - state.dragPos.y) * k;
+    let x = state.dragPos.x, y = state.dragPos.y;
+    const air = 0.0016;
+    for (let i = 0; i < 100; i++) {
+      vx *= (1 - air);
+      vy = vy * (1 - air) + STEP_ACCEL;
+      x += vx; y += vy;
+      if (y > GROUND_Y - 4 || x > WORLD_W) break;
+      if (i % 3 !== 0) continue;
+      const t = i / 100;
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0.14, 0.8 - t * 0.75)})`;
       ctx.beginPath();
-      ctx.arc(x, y, 3.2 - i * 0.04, 0, Math.PI * 2);
+      ctx.arc(x, y, Math.max(1.5, 3.4 - t * 1.9), 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  function drawCrates() {
-    for (const c of state.crates) {
+  function drawBlocks() {
+    for (const bd of state.blocks) {
+      const g = bd.game;
+      if (g.dead) continue;
+      const { w, h, material, seed } = g;
+      const dmg = 1 - clamp(g.hp / g.maxHp, 0, 1);
       ctx.save();
-      ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
-      ctx.fillStyle = c.color;
-      ctx.strokeStyle = "#3b2412";
-      ctx.lineWidth = 3;
-      roundRect(-c.w / 2, -c.h / 2, c.w, c.h, 6);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-c.w / 2 + 4, -c.h / 2 + 4);
-      ctx.lineTo(c.w / 2 - 4, c.h / 2 - 4);
-      ctx.moveTo(c.w / 2 - 4, -c.h / 2 + 4);
-      ctx.lineTo(-c.w / 2 + 4, c.h / 2 - 4);
-      ctx.stroke();
+      ctx.translate(bd.position.x, bd.position.y);
+      ctx.rotate(bd.angle);
+
+      ctx.shadowColor = "rgba(0,0,0,0.4)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 5;
+
+      if (material === "glass") {
+        const grad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+        grad.addColorStop(0, "rgba(214, 247, 255, 0.86)");
+        grad.addColorStop(0.5, "rgba(126, 209, 233, 0.66)");
+        grad.addColorStop(1, "rgba(70, 155, 190, 0.82)");
+        ctx.fillStyle = grad;
+        roundRect(-w / 2, -h / 2, w, h, 4);
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.strokeStyle = "rgba(235, 253, 255, 0.95)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.beginPath();
+        ctx.moveTo(-w / 2 + 5, h / 2 - 5);
+        ctx.lineTo(-w / 2 + 5, -h / 2 + 8);
+        ctx.lineTo(w / 2 - 9, -h / 2 + 8);
+        ctx.lineTo(w / 2 - 16, h / 2 - 5);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        const colors = material === "wood"
+          ? ["#e0b075", "#a8713c", "#6f4522"]
+          : ["#c3cddb", "#8e9bb0", "#5d6a80"];
+        const grad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+        grad.addColorStop(0, colors[0]);
+        grad.addColorStop(0.55, colors[1]);
+        grad.addColorStop(1, colors[2]);
+        ctx.fillStyle = grad;
+        roundRect(-w / 2, -h / 2, w, h, material === "wood" ? 4 : 6);
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+        ctx.strokeStyle = material === "wood" ? "#43280f" : "#414d61";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        if (material === "wood") {
+          ctx.strokeStyle = "rgba(60,32,12,0.42)";
+          ctx.lineWidth = 1.4;
+          const horizontal = w > h;
+          const lines = Math.max(2, Math.floor((horizontal ? h : w) / 11));
+          for (let i = 1; i <= lines; i++) {
+            const t = i / (lines + 1);
+            ctx.beginPath();
+            if (horizontal) {
+              const yy = -h / 2 + h * t;
+              ctx.moveTo(-w / 2 + 4, yy);
+              ctx.bezierCurveTo(-w / 6, yy + 2, w / 6, yy - 2, w / 2 - 4, yy);
+            } else {
+              const xx = -w / 2 + w * t;
+              ctx.moveTo(xx, -h / 2 + 4);
+              ctx.bezierCurveTo(xx + 2, -h / 6, xx - 2, h / 6, xx, h / 2 - 4);
+            }
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#3d2611";
+          for (const [nx, ny] of [[-0.34, -0.32], [0.34, -0.32], [-0.34, 0.32], [0.34, 0.32]]) {
+            ctx.beginPath(); ctx.arc(nx * w, ny * h, 1.8, 0, Math.PI * 2); ctx.fill();
+          }
+        } else {
+          ctx.fillStyle = "rgba(30,40,58,0.28)";
+          for (let i = 0; i < 7; i++) {
+            const px = (hash(seed + i * 3.1) - 0.5) * (w - 10);
+            const py = (hash(seed + i * 7.7) - 0.5) * (h - 10);
+            ctx.beginPath();
+            ctx.arc(px, py, 1 + hash(seed + i * 11.3) * 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // Damage cracks
+      if (dmg > 0.18) {
+        ctx.strokeStyle = `rgba(20,14,10,${0.35 + dmg * 0.5})`;
+        ctx.lineWidth = 1.2 + dmg;
+        const cracks = Math.ceil(dmg * 4);
+        for (let i = 0; i < cracks; i++) {
+          const a = hash(seed + i * 13.7) * 6.28;
+          const sx = Math.cos(a) * w * 0.1;
+          const sy = Math.sin(a) * h * 0.1;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + Math.cos(a) * w * 0.24, sy + Math.sin(a) * h * 0.24);
+          ctx.lineTo(sx + Math.cos(a + 0.7) * w * 0.36, sy + Math.sin(a + 0.7) * h * 0.36);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     }
   }
 
-  function drawOrbs(t) {
-    for (const o of state.orbs) {
-      if (!o.alive) continue;
-      const pulse = 1 + Math.sin(t * 4 + o.phase) * 0.08;
-      const r = o.r * pulse;
-      const glow = ctx.createRadialGradient(o.x, o.y, 2, o.x, o.y, r * 2.2);
-      glow.addColorStop(0, `hsla(${o.hue}, 90%, 75%, 0.95)`);
-      glow.addColorStop(0.5, `hsla(${o.hue}, 85%, 60%, 0.55)`);
-      glow.addColorStop(1, `hsla(${o.hue}, 85%, 60%, 0)`);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, r * 2.2, 0, Math.PI * 2);
-      ctx.fill();
+  function drawWisps() {
+    for (const bd of state.wisps) {
+      const g = bd.game;
+      if (!g.alive) continue;
+      const { x, y } = bd.position;
+      const pulse = 1 + Math.sin(state.time * 3.4 + g.phase) * 0.09;
+      const r = g.r * pulse;
 
-      ctx.fillStyle = `hsl(${o.hue}, 85%, 65%)`;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      const glow = ctx.createRadialGradient(x, y, 2, x, y, r * 3.1);
+      glow.addColorStop(0, `hsla(${g.hue}, 100%, 88%, 0.95)`);
+      glow.addColorStop(0.35, `hsla(${g.hue}, 95%, 68%, 0.55)`);
+      glow.addColorStop(1, `hsla(${g.hue}, 90%, 60%, 0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(x, y, r * 3.1, 0, Math.PI * 2); ctx.fill();
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(state.time * 0.7 + g.phase);
+      ctx.strokeStyle = `hsla(${g.hue}, 100%, 82%, 0.7)`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([5, 7]);
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.65, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      const core = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, 1, x, y, r);
+      core.addColorStop(0, "#ffffff");
+      core.addColorStop(0.45, `hsl(${g.hue}, 95%, 78%)`);
+      core.addColorStop(1, `hsl(${g.hue}, 80%, 52%)`);
+      ctx.fillStyle = core;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.beginPath();
-      ctx.arc(o.x - r * 0.3, o.y - r * 0.3, r * 0.22, 0, Math.PI * 2);
-      ctx.fill();
+      for (let i = 0; i < 3; i++) {
+        const a = state.time * 1.9 + g.phase + (i * Math.PI * 2) / 3;
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * r * 1.5, y + Math.sin(a) * r * 1.5, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
-  function drawStone() {
-    const s = state.stone;
-    if (!s || !s.active) return;
-    ctx.fillStyle = "#4b5563";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#1f2937";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.beginPath();
-    ctx.arc(s.x - 4, s.y - 5, 3, 0, Math.PI * 2);
-    ctx.fill();
+  function drawTrail() {
+    for (const p of state.trail) {
+      const a = clamp(p.life / 0.42, 0, 1);
+      ctx.fillStyle = `rgba(255, 236, 190, ${a * 0.42})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2 + a * 4, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
-  function drawParticles() {
+  function drawStones() {
+    for (const s of state.spentStones) {
+      drawStoneShape(s.body.position.x, s.body.position.y, s.body.game.r, s.type, s.body.angle, 0.85);
+    }
+    if (state.activeStone) {
+      const bd = state.activeStone.body;
+      if (state.activeStone.type === "bomber" && !state.abilityUsed) {
+        const pulse = 0.5 + 0.5 * Math.sin(state.time * 12);
+        ctx.strokeStyle = `rgba(255,180,80,${0.35 + pulse * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(bd.position.x, bd.position.y, bd.game.r + 7 + pulse * 3, 0, Math.PI * 2); ctx.stroke();
+      }
+      drawStoneShape(bd.position.x, bd.position.y, bd.game.r, state.activeStone.type, bd.angle);
+    } else if (!state.levelFailed && !state.levelComplete && state.ammo.length > 0 && state.reloadTimer <= 0) {
+      const p = state.dragging ? state.dragPos : ANCHOR;
+      drawStoneShape(p.x, p.y, STONE_TYPES[currentStoneType()].r, currentStoneType());
+    }
+  }
+
+  function drawEffects() {
+    for (const s of state.shockwaves) {
+      const a = clamp(s.life / s.maxLife, 0, 1);
+      ctx.strokeStyle = s.color;
+      ctx.globalAlpha = a * 0.75;
+      ctx.lineWidth = 3 * a + 1;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     for (const p of state.particles) {
-      const alpha = Math.max(0, p.life / p.maxLife);
-      ctx.fillStyle = `hsla(${p.hue}, 85%, 65%, ${alpha})`;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      const a = clamp(p.life / p.maxLife, 0, 1);
+      ctx.globalAlpha = a;
+      if (p.kind === "spark") {
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * a, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+        ctx.restore();
+      }
     }
+    ctx.globalAlpha = 1;
+    for (const f of state.floaters) {
+      const a = clamp(f.life / f.maxLife, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = f.color;
+      ctx.font = "bold 20px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.7)";
+      ctx.shadowBlur = 6;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
   }
 
-  function draw(t) {
-    drawBackground(t);
+  function drawPowerGauge() {
+    if (!state.dragging) return;
+    const x = ANCHOR.x - 46, y = GROUND_Y - 28;
+    ctx.fillStyle = "rgba(6,10,24,0.55)";
+    roundRect(x, y, 92, 10, 5); ctx.fill();
+    const col = state.power > 0.82 ? "#fbbf24" : state.power > 0.5 ? "#6ee7b7" : "#7dd3fc";
+    ctx.fillStyle = col;
+    roundRect(x + 2, y + 2, Math.max(2, 88 * state.power), 6, 3); ctx.fill();
+  }
+
+  function drawAbilityPrompt() {
+    const s = state.activeStone;
+    if (!s || state.abilityUsed || !STONE_TYPES[s.type].ability) return;
+    const p = s.body.position;
+    const pulse = 0.55 + 0.45 * Math.sin(state.time * 8);
+    ctx.globalAlpha = 0.55 + pulse * 0.45;
+    ctx.fillStyle = "#0b1020";
+    roundRect(p.x - 64, p.y - 52, 128, 26, 13); ctx.fill();
+    ctx.strokeStyle = "#fcd34d";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fcd34d";
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("CLICK / SPACE", p.x, p.y - 34);
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawSky();
+    drawHills(0.16, 430, 96, 0.0042, 0.8, "#3a456b");
+    drawHills(0.30, 468, 74, 0.0061, 2.7, "#3f5c63");
+    drawHills(0.48, 496, 52, 0.0089, 4.1, "#33544a");
+
+    const sx = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
+    const sy = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
+    ctx.save();
+    ctx.translate(-state.camera + sx, sy);
+    drawGround();
     drawTrajectory();
-    drawCrates();
-    drawOrbs(t);
-    drawParticles();
-    drawStone();
-    drawSlingshot();
+    drawBlocks();
+    drawWisps();
+    drawTrail();
+    drawEffects();
+    drawSlingshotBack();
+    drawStones();
+    drawBand();
+    drawPowerGauge();
+    drawAbilityPrompt();
+    ctx.restore();
+
+    // Subtle vignette on top of everything
+    const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(4,8,20,0.42)");
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
   }
 
+  // ---------------------------------------------------------------------------
+  // Main loop - fixed physics timestep
+  // ---------------------------------------------------------------------------
   let lastTime = performance.now();
   let acc = 0;
   const STEP = 1 / 60;
@@ -723,14 +1388,21 @@
     const dt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
     acc += dt;
-    while (acc >= STEP) {
+    let guard = 0;
+    while (acc >= STEP && guard < 5) {
+      Engine.update(engine, STEP_MS);
       update(STEP);
       acc -= STEP;
+      guard++;
     }
-    draw(now / 1000);
+    if (guard >= 5) acc = 0;
+    draw();
     requestAnimationFrame(loop);
   }
 
+  // ---------------------------------------------------------------------------
+  // Input
+  // ---------------------------------------------------------------------------
   canvas.addEventListener("mousedown", beginDrag);
   canvas.addEventListener("mousemove", moveDrag);
   window.addEventListener("mouseup", endDrag);
@@ -738,20 +1410,74 @@
   canvas.addEventListener("touchmove", moveDrag, { passive: false });
   window.addEventListener("touchend", endDrag, { passive: false });
 
-  restartBtn.addEventListener("click", () => {
-    ensureAudio();
-    loadLevel(state.levelIndex);
-  });
-
-  nextBtn.addEventListener("click", () => {
-    if (state.levelIndex < LEVELS.length - 1) {
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+      e.preventDefault();
       ensureAudio();
-      loadLevel(state.levelIndex + 1);
-    } else {
-      showMessage("You finished all levels! Final score: " + state.score);
+      if (state.activeStone && !state.abilityUsed) activateAbility();
+    } else if (e.key === "r" || e.key === "R") {
+      ensureAudio(); loadLevel(state.levelIndex);
+    } else if ((e.key === "n" || e.key === "N") && !nextBtn.disabled) {
+      ensureAudio(); loadLevel(state.levelIndex + 1);
+    } else if (e.key === "m" || e.key === "M") {
+      toggleMute();
+    } else if (e.key === "v" || e.key === "V") {
+      state.introTimer = 0;
+      setPeek(!state.peek);
     }
   });
 
+  window.addEventListener("keyup", (e) => {
+    if ((e.key === "v" || e.key === "V") && !state.activeStone) setPeek(false);
+  });
+
+  function setPeek(on) {
+    state.peek = on;
+    lookBtn.classList.toggle("active", on);
+    lookBtn.textContent = on ? "Viewing targets…" : "Peek at targets";
+  }
+
+  lookBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    state.introTimer = 0;
+    setPeek(true);
+  });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) {
+    lookBtn.addEventListener(type, () => setPeek(false));
+  }
+
+  function toggleMute() {
+    state.muted = !state.muted;
+    muteBtn.textContent = `Sound: ${state.muted ? "off" : "on"}`;
+    muteBtn.setAttribute("aria-pressed", String(state.muted));
+    if (!state.muted) { ensureAudio(); tone(660, 0.1, "sine", 0.04); }
+  }
+
+  restartBtn.addEventListener("click", () => { ensureAudio(); loadLevel(state.levelIndex); });
+  muteBtn.addEventListener("click", toggleMute);
+  nextBtn.addEventListener("click", () => {
+    if (state.levelIndex < LEVELS.length - 1) { ensureAudio(); loadLevel(state.levelIndex + 1); }
+  });
+  overlayPrimary.addEventListener("click", () => {
+    ensureAudio();
+    if (state.levelComplete) {
+      loadLevel(state.levelIndex < LEVELS.length - 1 ? state.levelIndex + 1 : 0);
+    } else {
+      loadLevel(state.levelIndex);
+    }
+  });
+  overlaySecondary.addEventListener("click", () => { ensureAudio(); loadLevel(state.levelIndex); });
+
   loadLevel(0);
   requestAnimationFrame(loop);
+
+  // Opt-in hook for the headless Node regression tests.
+  if (globalThis.__SLINGSTONE_TEST__) {
+    globalThis.__slingstone = {
+      state, engine, world, LEVELS, STONE_TYPES,
+      loadLevel, activateAbility, popWisp, launch,
+      bodies: () => Composite.allBodies(world),
+      toggleMute,
+    };
+  }
 })();

@@ -39,3 +39,21 @@ The tool will refuse to copy anything unless `--i-have-rights` is supplied and t
 - `out/BUILD_MANIFEST.json` — build inputs, tool version, and mapping summary.
 - `out/SHA256SUMS` — checksums for the rebuilt tree.
 - `out/AngryBirds-PC-1.0.0.zip` — optional release archive when `--zip` is used.
+
+## `test_game.js`
+
+Headless regression tests for the Slingstone browser game. Runs the real game loop and the vendored Matter.js physics against a stub DOM/canvas, so no browser or `npm install` is required.
+
+```bash
+node tools/test_game.js
+```
+
+It verifies repeated shots, structure stability, out-of-stones handling, reachability of all three levels, destructible blocks, every shot ability, star awards, camera/flyover/peek, and the sound toggle. Set `globalThis.__SLINGSTONE_TEST__ = true` before loading `game.js` to install the small test hook.
+
+## `build_release.py`
+
+Builds `dist/Slingstone-2.0.0.zip` from the original game files plus the vendored, MIT-licensed Matter.js build and its license text.
+
+```bash
+python3 tools/build_release.py
+```

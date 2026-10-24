@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build a release zip containing only the original Slingstone game files."""
+"""Build a release zip containing only the original Slingstone game files.
+
+The vendored Matter.js build is included (MIT licensed) along with its license
+text. Screenshots under docs/ are images of the original game itself.
+"""
 
 from __future__ import annotations
 
@@ -9,18 +13,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "dist"
 OUT_DIR.mkdir(exist_ok=True)
-ZIP_PATH = OUT_DIR / "Slingstone-1.0.1.zip"
+VERSION = "2.0.0"
+ZIP_PATH = OUT_DIR / f"Slingstone-{VERSION}.zip"
 
 FILES = [
     "index.html",
     "style.css",
     "game.js",
+    "vendor/matter.min.js",
+    "vendor/MATTER_LICENSE.txt",
     "LICENSE",
     "README.md",
     "NOTICE.md",
     "THIRD_PARTY_NOTICES.md",
     "docs/GAME_DESIGN.md",
     "docs/RELEASE_NOTES_SLINGSTONE.md",
+    "docs/preview-gameplay.jpg",
+    "docs/preview-level3.jpg",
 ]
 
 
@@ -30,7 +39,7 @@ def main() -> int:
             path = ROOT / rel
             if not path.is_file():
                 raise SystemExit(f"Missing required release file: {path}")
-            zf.write(path, f"Slingstone-1.0.1/{rel}")
+            zf.write(path, f"Slingstone-{VERSION}/{rel}")
     print(f"Wrote {ZIP_PATH} ({ZIP_PATH.stat().st_size} bytes)")
     return 0
 

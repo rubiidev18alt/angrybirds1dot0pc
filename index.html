@@ -9,30 +9,63 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Slingstone</h1>
-      <p class="subtitle">An original open-source slingshot physics game</p>
+      <div class="title-row">
+        <h1>Slingstone</h1>
+        <span class="version-badge">v2.0 · Matter.js edition</span>
+      </div>
+      <p class="subtitle">An original open-source slingshot physics game — rebuilt with a rigid-body engine</p>
     </header>
 
     <div class="hud">
-      <span id="levelLabel" class="pill">Level 1</span>
+      <span id="levelLabel" class="pill">Level 1 / 3</span>
       <span id="scoreLabel" class="pill">Score: 0</span>
-      <span id="shotsLabel" class="pill">Shots: 5</span>
+      <span id="stonesLabel" class="pill">Stones: 4</span>
       <span id="powerLabel" class="pill">Power: 0%</span>
       <button id="restartBtn" type="button">Restart</button>
       <button id="nextBtn" type="button" disabled>Next Level</button>
+      <button id="lookBtn" type="button" class="ghost-btn">Peek at targets</button>
+      <button id="muteBtn" type="button" class="ghost-btn" aria-pressed="false">Sound: on</button>
     </div>
 
-    <canvas id="game" width="960" height="600" aria-label="Slingstone game canvas"></canvas>
+    <div class="stage">
+      <canvas id="game" width="960" height="600" aria-label="Slingstone game canvas"></canvas>
+
+      <div id="overlay" class="overlay hidden" role="dialog" aria-live="polite">
+        <div class="card">
+          <div id="overlayTitle" class="card-title">Level clear!</div>
+          <div id="overlayStars" class="stars" aria-label="stars earned"></div>
+          <div id="overlayText" class="card-text"></div>
+          <div class="card-actions">
+            <button id="overlayPrimary" type="button">Next Level</button>
+            <button id="overlaySecondary" type="button" class="ghost-btn">Replay</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="ammo-wrap">
+        <span class="toolbar-label">Stone queue</span>
+        <div id="ammoStrip" class="ammo" aria-label="remaining stones"></div>
+      </div>
+      <div id="abilityHint" class="ability-hint">Pull back and release to launch.</div>
+    </div>
 
     <div id="message" class="message hidden" role="status"></div>
-    <p class="hint">Drag the stone back from the slingshot and release. Pull farther for more power. A new stone loads automatically after each shot. Pop every glowing orb to win.</p>
+
+    <p class="hint">
+      Drag the stone back and release. <strong>Click, tap, or press Space mid-flight</strong> to use a special
+      stone's ability. Knock the glowing wisps off the world to win — earn up to three stars.
+    </p>
 
     <footer>
-      <p>Original game code, art, and audio. Built for PC browsers. No third-party game assets.</p>
+      <p>Original game code, procedural art, and synthesized audio. Built for PC browsers. Third-party engine:
+        <a href="vendor/MATTER_LICENSE.txt">Matter.js (MIT)</a>. See <a href="THIRD_PARTY_NOTICES.md">third-party notices</a>.</p>
       <p><a href="https://github.com/rubiidev18alt/angrybirds1dot0pc">Repository</a> · <a href="docs/GAME_DESIGN.md">Design notes</a></p>
     </footer>
   </div>
 
+  <script src="vendor/matter.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
