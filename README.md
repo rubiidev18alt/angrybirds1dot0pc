@@ -19,7 +19,8 @@ You can also open `index.html` directly in a modern browser, though a local serv
 ## Controls
 
 - Click/touch and drag the stone back from the slingshot.
-- Release to launch.
+- Pull farther for more power — the HUD and an on-canvas gauge show the charge.
+- Release to launch. A new stone loads automatically once the previous one settles.
 - Pop every glowing orb to complete the level.
 - Press **Restart** to retry the current level.
 - Press **Next Level** after completing a level.
@@ -33,6 +34,7 @@ You can also open `index.html` directly in a modern browser, though a local serv
 | `game.js` | Original game logic, physics, rendering, and audio |
 | `docs/GAME_DESIGN.md` | Design notes |
 | `tools/build_release.py` | Builds the release zip |
+| `tools/test_game.js` | Headless gameplay regression tests |
 
 The legacy rights-gated porting tooling remains in `tools/port_assets.py`, `tools/test_port_assets.py`, and the other documents under `docs/`. See [docs/PERMISSION_DOCUMENTS_INDEX.md](docs/PERMISSION_DOCUMENTS_INDEX.md) for the draft permission/agreement documents. Nothing from the paused port attempt is included in the Slingstone release.
 
@@ -42,15 +44,18 @@ The legacy rights-gated porting tooling remains in `tools/port_assets.py`, `tool
 python3 tools/build_release.py
 ```
 
-This creates `dist/Slingstone-1.0.0.zip` containing only the original game files.
+This creates `dist/Slingstone-1.0.1.zip` containing only the original game files.
 
 ## Validation
 
 ```bash
 node --check game.js
+node tools/test_game.js
 python3 tools/build_release.py
 python3 tools/test_port_assets.py
 ```
+
+`tools/test_game.js` runs the real game loop against a stub canvas in Node. It checks that multiple shots can be fired, that crate stacks stay stable at rest, that running out of stones ends the level, and that every level's targets are reachable.
 
 GitHub Actions runs these checks on pushes and pull requests.
 

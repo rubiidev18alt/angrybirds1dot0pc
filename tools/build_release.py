@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "dist"
 OUT_DIR.mkdir(exist_ok=True)
-ZIP_PATH = OUT_DIR / "Slingstone-1.0.0.zip"
+ZIP_PATH = OUT_DIR / "Slingstone-1.0.1.zip"
 
 FILES = [
     "index.html",
@@ -30,7 +30,7 @@ def main() -> int:
             path = ROOT / rel
             if not path.is_file():
                 raise SystemExit(f"Missing required release file: {path}")
-            zf.write(path, f"Slingstone-1.0.0/{rel}")
+            zf.write(path, f"Slingstone-1.0.1/{rel}")
     print(f"Wrote {ZIP_PATH} ({ZIP_PATH.stat().st_size} bytes)")
     return 0
 
